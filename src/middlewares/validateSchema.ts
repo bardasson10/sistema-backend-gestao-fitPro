@@ -17,7 +17,6 @@ export const validateSchema =
                 return res.status(400).json({
                     message: "Validation failed",
                     details: err.issues.map(issue => ({
-                        campo: issue.path.join('.'),
                         mensage: issue.message
                     }))
                 });

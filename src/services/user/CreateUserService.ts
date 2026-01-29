@@ -1,8 +1,7 @@
 class CreateUserService {
     async execute() {
-    console.log("User created successfully");
     
-        return { message: "User created successfully" };
+        return { info: "User created successfully" };
     }
 }
 
