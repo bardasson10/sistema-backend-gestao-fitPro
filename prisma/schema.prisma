@@ -1,0 +1,273 @@
+
+//criar migrate: yarn prisma migrate dev
+
+//generate client: yarn prisma generate
+
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+// --- ENUMS ---
+
+enum Perfil {
+  ADM
+  GERENTE
+  FUNCIONARIO
+}
+
+// --- GESTÃO DE USUÁRIOS ---
+
+model Usuario {
+  id           String   @id @default(uuid())
+  perfil       Perfil   @default(FUNCIONARIO)
+  nome         String
+  email        String   @unique
+  senha        String
+  status       String   @default("ativo")
+  funcaoSetor  String?  @map("funcao_setor")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  // Relacionamentos Reversos
+  movimentacoes  MovimentacaoEstoque[]
+  lotesResponsa  LoteProducao[]
+  conferencias   Conferencia[]
+
+  @@map("usuario")
+}
+
+// --- CADASTROS BASE DE PRODUTOS ---
+
+model TipoProduto {
+  id        String   @id @default(uuid())
+  nome      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  produtos  Produto[]
+  tamanhos  TipoProdutoTamanho[]
+
+  @@map("tipo_produto")
+}
+
+model Produto {
+  id               String       @id @default(uuid())
+  tipoProdutoId    String       @map("tipo_produto_id")
+  nome             String
+  sku              String       @unique
+  fabricante       String?
+  custoMedioPeca   Decimal?     @map("custo_medio_peca") @db.Decimal(10, 2)
+  precoMedioVenda  Decimal?     @map("preco_medio_venda") @db.Decimal(10, 2)
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  tipo             TipoProduto  @relation(fields: [tipoProdutoId], references: [id])
+  lotes            LoteProducao[]
+
+  @@map("produto")
+}
+
+model Tamanho {
+  id        String   @id @default(uuid())
+  nome      String
+  ordem     Int
+
+  tiposAceitos      TipoProdutoTamanho[]
+  loteItems         LoteItem[]
+  conferenciaItems  ConferenciaItem[]
+
+  @@map("tamanho")
+}
+
+model TipoProdutoTamanho {
+  id            String      @id @default(uuid())
+  tipoProdutoId String      @map("tipo_produto_id")
+  tamanhoId     String      @map("tamanho_id")
+
+  tipo          TipoProduto @relation(fields: [tipoProdutoId], references: [id])
+  tamanho       Tamanho     @relation(fields: [tamanhoId], references: [id])
+
+  @@unique([tipoProdutoId, tamanhoId])
+  @@map("tipo_produto_tamanho")
+}
+
+// --- GESTÃO DE MATERIAIS ---
+
+model Fornecedor {
+  id        String   @id @default(uuid())
+  nome      String
+  tipo      String?  
+  contato   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  tecidos   Tecido[]
+
+  @@map("fornecedor")
+}
+
+model Cor {
+  id        String   @id @default(uuid())
+  nome      String
+  codigoHex String?  @map("codigo_hex")
+  
+  tecidos   Tecido[]
+
+  @@map("cor")
+}
+
+model Tecido {
+  id                 String   @id @default(uuid())
+  fornecedorId       String   @map("fornecedor_id")
+  corId              String   @map("cor_id")
+  nome               String
+  codigoReferencia   String?  @map("codigo_referencia")
+  rendimentoMetroKg  Decimal? @map("rendimento_metro_kg") @db.Decimal(10, 3)
+  larguraMetros      Decimal? @map("largura_metros") @db.Decimal(10, 2)
+  valorPorKg         Decimal? @map("valor_por_kg") @db.Decimal(10, 2)
+  gramatura          Decimal? @db.Decimal(10, 2)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  fornecedor         Fornecedor @relation(fields: [fornecedorId], references: [id])
+  cor                Cor        @relation(fields: [corId], references: [id])
+  rolos              EstoqueRolo[]
+  lotes              LoteProducao[]
+
+  @@map("tecido")
+}
+
+model EstoqueRolo {
+  id                String   @id @default(uuid())
+  tecidoId          String   @map("tecido_id")
+  codigoBarraRolo   String?  @unique @map("codigo_barra_rolo")
+  pesoInicialKg     Decimal  @map("peso_inicial_kg") @db.Decimal(10, 3)
+  pesoAtualKg       Decimal  @map("peso_atual_kg") @db.Decimal(10, 3)
+  situacao          String   @default("disponivel")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tecido            Tecido   @relation(fields: [tecidoId], references: [id])
+  movimentacoes     MovimentacaoEstoque[]
+
+  @@map("estoque_rolo")
+}
+
+model MovimentacaoEstoque {
+  id                String   @id @default(uuid())
+  estoqueRoloId     String   @map("estoque_rolo_id")
+  usuarioId         String   @map("usuario_id")
+  tipoMovimentacao  String   @map("tipo_movimentacao")
+  pesoMovimentado   Decimal? @map("peso_movimentado") @db.Decimal(10, 3)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  rolo              EstoqueRolo @relation(fields: [estoqueRoloId], references: [id])
+  usuario           Usuario     @relation(fields: [usuarioId], references: [id])
+
+  @@map("movimentacao_estoque")
+}
+
+// --- PARCEIROS (FACÇÕES) ---
+
+model Faccao {
+  id              String   @id @default(uuid())
+  nome            String
+  responsavel     String?
+  contato         String?
+  prazoMedioDias  Int?     @map("prazo_medio_dias")
+  status          String   @default("ativo")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  direcionamentos Direcionamento[]
+
+  @@map("faccao")
+}
+
+// --- FLUXO DE PRODUÇÃO ---
+
+model LoteProducao {
+  id             String   @id @default(uuid())
+  codigoLote     String   @unique @map("codigo_lote")
+  produtoId      String   @map("produto_id")
+  tecidoId       String   @map("tecido_id")
+  responsavelId  String   @map("responsavel_id")
+  status         String
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  produto        Produto  @relation(fields: [produtoId], references: [id])
+  tecido         Tecido   @relation(fields: [tecidoId], references: [id])
+  responsavel    Usuario  @relation(fields: [responsavelId], references: [id])
+  
+  items          LoteItem[]
+  direcionamentos Direcionamento[]
+
+  @@map("lote_producao")
+}
+
+model LoteItem {
+  id                 String   @id @default(uuid())
+  loteProducaoId     String   @map("lote_producao_id")
+  tamanhoId          String   @map("tamanho_id")
+  quantidadePlanejada Int     @map("quantidade_planejada")
+
+  lote               LoteProducao @relation(fields: [loteProducaoId], references: [id])
+  tamanho            Tamanho      @relation(fields: [tamanhoId], references: [id])
+
+  @@map("lote_item")
+}
+
+model Direcionamento {
+  id                  String   @id @default(uuid())
+  loteProducaoId      String   @map("lote_producao_id")
+  faccaoId            String   @map("faccao_id")
+  tipoServico         String   @map("tipo_servico")
+  status              String   @default("enviado")
+  dataSaida           DateTime? @map("data_saida") @db.Date
+  dataPrevisaoRetorno DateTime? @map("data_previsao_retorno") @db.Date
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  lote                LoteProducao @relation(fields: [loteProducaoId], references: [id])
+  faccao              Faccao       @relation(fields: [faccaoId], references: [id])
+  conferencias        Conferencia[]
+
+  @@map("direcionamento")
+}
+
+model Conferencia {
+  id                 String   @id @default(uuid())
+  direcionamentoId   String   @map("direcionamento_id")
+  responsavelId      String   @map("responsavel_id")
+  dataConferencia    DateTime? @map("data_conferencia") @db.Date
+  observacao         String?
+  liberadoPagamento  Boolean  @default(false) @map("liberado_pagamento")
+  statusQualidade    String?  @map("status_qualidade")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  direcionamento     Direcionamento @relation(fields: [direcionamentoId], references: [id])
+  responsavel        Usuario        @relation(fields: [responsavelId], references: [id])
+  items              ConferenciaItem[]
+
+  @@map("conferencia")
+}
+
+model ConferenciaItem {
+  id             String      @id @default(uuid())
+  conferenciaId  String      @map("conferencia_id")
+  tamanhoId      String      @map("tamanho_id")
+  qtdRecebida    Int         @map("qtd_recebida")
+  qtdDefeito     Int         @default(0) @map("qtd_defeito")
+
+  conferencia    Conferencia @relation(fields: [conferenciaId], references: [id])
+  tamanho        Tamanho     @relation(fields: [tamanhoId], references: [id])
+
+  @@map("conferencia_item")
+}
