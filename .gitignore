@@ -1,0 +1,34 @@
+# Dependências
+node_modules/
+.pnp/
+.pnp.js
+
+# Variáveis de Ambiente (CRÍTICO)
+# Nunca suba seu arquivo .env para o GitHub pois ele contém a senha do seu banco
+.env
+.env.test
+.env.local
+
+# Prisma
+# O diretório de migrations deve ser commitado, mas arquivos SQLite ou logs não
+*.db
+*.db-journal
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+*.log
+
+# Build e Saída
+dist/
+build/
+out/
+.next/
+
+# IDEs e Sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,27 @@
+{
+  "name": "sistema-backend-gestao-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts"
+  },
+  "repository": "https://github.com/bardasson10/sistema-backend-gestao-backend.git",
+  "author": "Bardasson <121575366+bardasson10@users.noreply.github.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^25.1.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "tsx": "^4.21.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.16.0",
+    "prisma": "^7.3.0",
+    "typescript": "^5.9.3"
+  }
+}
