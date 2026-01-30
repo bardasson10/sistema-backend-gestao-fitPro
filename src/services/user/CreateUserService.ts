@@ -1,4 +1,4 @@
-import { ICreateUserRequest, ICreateUserResponse } from "../../interfaces/ICreateUser";
+import { ICreateUserRequest, ICreateUserResponse } from "../../interfaces/IUser";
 import prismaClient from "../../prisma";
 import { hash } from "bcryptjs";
 class CreateUserService {

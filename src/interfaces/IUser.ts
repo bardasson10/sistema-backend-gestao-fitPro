@@ -18,3 +18,14 @@ export interface ICreateUserResponse {
     funcaoSetor?: string | null;
     createdAt: Date;
 }
+
+export interface IUserResponse {
+    id: string;
+    nome: string;
+    email: string;
+    perfil: Perfil;
+    status: string;
+    funcaoSetor?: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+}

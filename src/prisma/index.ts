@@ -7,6 +7,6 @@ const adapter = new PrismaPg({
     connectionString: conectionString,
 });
 
-const prisma = new PrismaClient({adapter});
+const prismaClient = new PrismaClient({adapter});
 
-export default prisma;
+export default prismaClient;
