@@ -2,13 +2,20 @@ import cors from 'cors';
 import express, {NextFunction, Request, Response} from 'express';
 import { router } from './route';
 import  'dotenv/config';
-
-
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './swaggerConfig';
 
 const app = express();
 
 app.use(express.json());
 app.use(cors());
+
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'FitPro API Documentation'
+}));
+
 app.use(router);
 
 app.use((error: Error, _: Request, res: Response, next: NextFunction) => {

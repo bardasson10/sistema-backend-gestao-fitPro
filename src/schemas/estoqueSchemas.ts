@@ -30,9 +30,9 @@ export const createMovimentacaoEstoqueSchema = z.object({
 
 export const listMovimentacaoSchema = z.object({
     query: z.object({
-        estoqueRoloId: z.string().uuid().optional(),
+        estoqueRoloId: z.uuid().optional(),
         tipoMovimentacao: z.string().optional(),
-        dataInicio: z.string().datetime().optional(),
-        dataFim: z.string().datetime().optional(),
+        dataInicio: z.date().optional(),
+        dataFim: z.date().optional(),
     }),
 });

@@ -35,6 +35,7 @@ import { CreateDirecionamentoController, ListAllDirecionamentoController, ListBy
 import { CreateConferenciaController, ListAllConferenciaController, ListByIdConferenciaController, UpdateConferenciaController, DeleteConferenciaController, GetRelatorioProdutividadeController } from "./controllers/producao/ConferenciaController";
 import { createFaccaoSchema, updateFaccaoSchema, createLoteProducaoSchema, updateLoteProducaoSchema, createDirecionamentoSchema, updateDirecionamentoSchema, createConferenciaSchema, updateConferenciaSchema } from "./schemas/producaoSchemas";
 
+
 const router = Router();
 
 // ==================== USUÁRIOS ====================
