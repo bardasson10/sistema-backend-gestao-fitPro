@@ -18,10 +18,12 @@ class CreateConferenciaController {
 
 class ListAllConferenciaController {
     async handle(req: Request, res: Response) {
-        const { statusQualidade, liberadoPagamento } = req.query;
+        const { statusQualidade, liberadoPagamento, page, limit } = req.query;
         const conferencias = await new ListAllConferenciaService().execute(
             statusQualidade as string,
-            liberadoPagamento === "true"
+            liberadoPagamento === "true",
+            page as string | number | undefined,
+            limit as string | number | undefined
         );
         return res.json(conferencias);
     }

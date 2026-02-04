@@ -1,4 +1,5 @@
 import { ICreateFaccaoRequest, IUpdateFaccaoRequest } from "../../interfaces/IProducao";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateFaccaoService {
@@ -29,15 +30,27 @@ class CreateFaccaoService {
 }
 
 class ListAllFaccaoService {
-    async execute(status?: string) {
-        const faccoes = await prismaClient.faccao.findMany({
-            where: status ? { status } : undefined,
-            include: {
-                direcionamentos: true
-            }
-        });
+    async execute(status?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return faccoes;
+        const [faccoes, total] = await Promise.all([
+            prismaClient.faccao.findMany({
+                where: status ? { status } : undefined,
+                include: {
+                    direcionamentos: true
+                },
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: "desc"
+                }
+            }),
+            prismaClient.faccao.count({
+                where: status ? { status } : undefined
+            })
+        ]);
+
+        return createPaginatedResponse(faccoes, total, pageNumber, pageLimit);
     }
 }
 

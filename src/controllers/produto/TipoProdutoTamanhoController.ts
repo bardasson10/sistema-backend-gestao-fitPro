@@ -15,7 +15,7 @@ class CreateTipoProdutoTamanhoController {
 class ListTipoProdutoTamanhoController {
     async handle(req: Request, res: Response) {
         const { tipoProdutoId } = req.params;
-        const tamanhos = await new ListTipoProdutoTamanhoService().execute(tipoProdutoId);
+        const tamanhos = await new ListTipoProdutoTamanhoService().execute(tipoProdutoId as string);
         return res.json(tamanhos);
     }
 }

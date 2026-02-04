@@ -1,4 +1,5 @@
 import { ICreateTecidoRequest, IUpdateTecidoRequest } from "../../interfaces/IMaterial";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateTecidoService {
@@ -57,21 +58,36 @@ class CreateTecidoService {
 }
 
 class ListAllTecidoService {
-    async execute(fornecedorId?: string, corId?: string) {
-        const tecidos = await prismaClient.tecido.findMany({
-            where: {
-                ...(fornecedorId && { fornecedorId }),
-                ...(corId && { corId })
-            },
-            include: {
-                fornecedor: true,
-                cor: true,
-                rolos: true,
-                lotes: true
-            }
-        });
+    async execute(fornecedorId?: string, corId?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return tecidos;
+        const [tecidos, total] = await Promise.all([
+            prismaClient.tecido.findMany({
+                where: {
+                    ...(fornecedorId && { fornecedorId }),
+                    ...(corId && { corId })
+                },
+                include: {
+                    fornecedor: true,
+                    cor: true,
+                    rolos: true,
+                    lotes: true
+                },
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: 'desc'
+                }
+            }),
+            prismaClient.tecido.count({
+                where: {
+                    ...(fornecedorId && { fornecedorId }),
+                    ...(corId && { corId })
+                }
+            })
+        ]);
+
+        return createPaginatedResponse(tecidos, total, pageNumber, pageLimit);
     }
 }
 

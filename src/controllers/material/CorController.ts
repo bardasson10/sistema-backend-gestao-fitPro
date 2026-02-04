@@ -13,8 +13,9 @@ class CreateCorController {
 }
 
 class ListAllCorController {
-    async handle(_: Request, res: Response) {
-        const cores = await new ListAllCorService().execute();
+    async handle(req: Request, res: Response) {
+        const { page, limit } = req.query;
+        const cores = await new ListAllCorService().execute(page as string | number | undefined, limit as string | number | undefined);
         return res.json(cores);
     }
 }

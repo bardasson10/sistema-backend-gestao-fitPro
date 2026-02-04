@@ -17,8 +17,8 @@ class CreateFaccaoController {
 
 class ListAllFaccaoController {
     async handle(req: Request, res: Response) {
-        const { status } = req.query;
-        const faccoes = await new ListAllFaccaoService().execute(status as string);
+        const { status, page, limit } = req.query;
+        const faccoes = await new ListAllFaccaoService().execute(status as string, page as string | number | undefined, limit as string | number | undefined);
         return res.json(faccoes);
     }
 }

@@ -18,8 +18,8 @@ class CreateProdutoController {
 
 class ListAllProdutoController {
     async handle(req: Request, res: Response) {
-        const { tipoProdutoId } = req.query;
-        const produtos = await new ListAllProdutoService().execute(tipoProdutoId as string);
+        const { tipoProdutoId, page, limit } = req.query;
+        const produtos = await new ListAllProdutoService().execute(tipoProdutoId as string, page as string | number | undefined, limit as string | number | undefined);
         return res.json(produtos);
     }
 }

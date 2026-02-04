@@ -17,8 +17,8 @@ class CreateEstoqueRoloController {
 
 class ListAllEstoqueRoloController {
     async handle(req: Request, res: Response) {
-        const { tecidoId, situacao } = req.query;
-        const rolos = await new ListAllEstoqueRoloService().execute(tecidoId as string, situacao as string);
+        const { tecidoId, situacao, page, limit } = req.query;
+        const rolos = await new ListAllEstoqueRoloService().execute(tecidoId as string, situacao as string, page as string | number | undefined, limit as string);
         return res.json(rolos);
     }
 }

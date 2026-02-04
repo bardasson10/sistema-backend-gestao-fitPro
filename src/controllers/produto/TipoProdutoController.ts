@@ -11,7 +11,8 @@ class CreateTipoProdutoController {
 
 class ListAllTipoProdutoController {
     async handle(req: Request, res: Response) {
-        const tiposProduto = await new ListAllTipoProdutoService().execute();
+        const { page, limit } = req.query;
+        const tiposProduto = await new ListAllTipoProdutoService().execute(page as string | number | undefined, limit as string | number | undefined);
         return res.json(tiposProduto);
     }
 }

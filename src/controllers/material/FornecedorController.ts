@@ -14,8 +14,9 @@ class CreateFornecedorController {
 }
 
 class ListAllFornecedorController {
-    async handle(_: Request, res: Response) {
-        const fornecedores = await new ListAllFornecedorService().execute();
+    async handle(req: Request, res: Response) {
+        const { page, limit } = req.query;
+        const fornecedores = await new ListAllFornecedorService().execute(page as string | number | undefined, limit as string | number | undefined);
         return res.json(fornecedores);
     }
 }

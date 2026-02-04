@@ -17,13 +17,13 @@ export interface IUpdateFaccaoRequest {
 
 // Lote Producao
 export interface ILoteItemInput {
+    produtoId: string;
     tamanhoId: string;
     quantidadePlanejada: number;
 }
 
 export interface ICreateLoteProducaoRequest {
     codigoLote: string;
-    produtoId: string;
     tecidoId: string;
     responsavelId: string;
     status?: string;
@@ -39,7 +39,6 @@ export interface IUpdateLoteProducaoRequest {
 export interface ILoteProducaoResponse {
     id: string;
     codigoLote: string;
-    produtoId: string;
     tecidoId: string;
     responsavelId: string;
     status: string;

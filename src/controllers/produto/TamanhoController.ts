@@ -10,8 +10,9 @@ class CreateTamanhoController {
 }
 
 class ListAllTamanhoController {
-    async handle(_: Request, res: Response) {
-        const tamanhos = await new ListAllTamanhoService().execute();
+    async handle(req: Request, res: Response) {
+        const { page, limit } = req.query;
+        const tamanhos = await new ListAllTamanhoService().execute(page as string | number | undefined, limit as string);
         return res.json(tamanhos);
     }
 }

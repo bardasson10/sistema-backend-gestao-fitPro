@@ -1,4 +1,5 @@
 import { ICreateProdutoRequest, IUpdateProdutoRequest } from "../../interfaces/IProduto";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateProdutoService {
@@ -41,16 +42,28 @@ class CreateProdutoService {
 }
 
 class ListAllProdutoService {
-    async execute(tipoProdutoId?: string) {
-        const produtos = await prismaClient.produto.findMany({
-            where: tipoProdutoId ? { tipoProdutoId } : undefined,
-            include: {
-                tipo: true,
-                lotes: true
-            }
-        });
+    async execute(tipoProdutoId?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return produtos;
+        const [produtos, total] = await Promise.all([
+            prismaClient.produto.findMany({
+                where: tipoProdutoId ? { tipoProdutoId } : undefined,
+                include: {
+                    tipo: true,
+                    lotes: true
+                },
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: 'desc'
+                }
+            }),
+            prismaClient.produto.count({
+                where: tipoProdutoId ? { tipoProdutoId } : undefined
+            })
+        ]);
+
+        return createPaginatedResponse(produtos, total, pageNumber, pageLimit);
     }
 }
 

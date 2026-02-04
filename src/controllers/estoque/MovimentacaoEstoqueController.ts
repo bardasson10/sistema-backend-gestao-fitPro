@@ -17,12 +17,14 @@ class CreateMovimentacaoEstoqueController {
 
 class ListAllMovimentacaoEstoqueController {
     async handle(req: Request, res: Response) {
-        const { estoqueRoloId, tipoMovimentacao, dataInicio, dataFim } = req.query;
+        const { estoqueRoloId, tipoMovimentacao, dataInicio, dataFim, page, limit } = req.query;
         const movimentacoes = await new ListAllMovimentacaoEstoqueService().execute(
             estoqueRoloId as string,
             tipoMovimentacao as string,
             dataInicio as string,
-            dataFim as string
+            dataFim as string,
+            page as string | number | undefined,
+            limit as string | number | undefined
         );
         return res.json(movimentacoes);
     }

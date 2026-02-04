@@ -66,7 +66,7 @@ model Produto {
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
   tipo             TipoProduto  @relation(fields: [tipoProdutoId], references: [id])
-  lotes            LoteProducao[]
+  loteItems        LoteItem[]
 
   @@map("produto")
 }
@@ -198,7 +198,6 @@ model Faccao {
 model LoteProducao {
   id             String   @id @default(uuid())
   codigoLote     String   @unique @map("codigo_lote")
-  produtoId      String   @map("produto_id")
   tecidoId       String   @map("tecido_id")
   responsavelId  String   @map("responsavel_id")
   status         String
@@ -206,7 +205,6 @@ model LoteProducao {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  produto        Produto  @relation(fields: [produtoId], references: [id])
   tecido         Tecido   @relation(fields: [tecidoId], references: [id])
   responsavel    Usuario  @relation(fields: [responsavelId], references: [id])
   
@@ -220,10 +218,12 @@ model LoteProducao {
 model LoteItem {
   id                 String   @id @default(uuid())
   loteProducaoId     String   @map("lote_producao_id")
+  produtoId          String   @map("produto_id")
   tamanhoId          String   @map("tamanho_id")
   quantidadePlanejada Int     @map("quantidade_planejada")
 
   lote               LoteProducao @relation(fields: [loteProducaoId], references: [id])
+  produto            Produto      @relation(fields: [produtoId], references: [id])
   tamanho            Tamanho      @relation(fields: [tamanhoId], references: [id])
 
   @@map("lote_item")

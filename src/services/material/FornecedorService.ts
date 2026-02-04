@@ -1,4 +1,5 @@
 import { ICreateFornecedorRequest, IUpdateFornecedorRequest } from "../../interfaces/IMaterial";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateFornecedorService {
@@ -27,14 +28,24 @@ class CreateFornecedorService {
 }
 
 class ListAllFornecedorService {
-    async execute() {
-        const fornecedores = await prismaClient.fornecedor.findMany({
-            include: {
-                tecidos: true
-            }
-        });
+    async execute(page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return fornecedores;
+        const [fornecedores, total] = await Promise.all([
+            prismaClient.fornecedor.findMany({
+                include: {
+                    tecidos: true
+                },
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: 'desc'
+                }
+            }),
+            prismaClient.fornecedor.count()
+        ]);
+
+        return createPaginatedResponse(fornecedores, total, pageNumber, pageLimit);
     }
 }
 

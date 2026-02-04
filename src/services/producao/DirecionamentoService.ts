@@ -1,4 +1,5 @@
 import { ICreateDirecionamentoRequest, IUpdateDirecionamentoRequest } from "../../interfaces/IProducao";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateDirecionamentoService {
@@ -53,28 +54,40 @@ class CreateDirecionamentoService {
 }
 
 class ListAllDirecionamentoService {
-    async execute(status?: string, faccaoId?: string) {
-        const direcionamentos = await prismaClient.direcionamento.findMany({
-            where: {
-                ...(status && { status }),
-                ...(faccaoId && { faccaoId })
-            },
-            include: {
-                lote: {
-                    include: {
-                        produto: true,
-                        tecido: true
-                    }
-                },
-                faccao: true,
-                conferencias: true
-            },
-            orderBy: {
-                createdAt: "desc"
-            }
-        });
+    async execute(status?: string, faccaoId?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return direcionamentos;
+        const [direcionamentos, total] = await Promise.all([
+            prismaClient.direcionamento.findMany({
+                where: {
+                    ...(status && { status }),
+                    ...(faccaoId && { faccaoId })
+                },
+                include: {
+                    lote: {
+                        include: {
+                            produto: true,
+                            tecido: true
+                        }
+                    },
+                    faccao: true,
+                    conferencias: true
+                },
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: "desc"
+                }
+            }),
+            prismaClient.direcionamento.count({
+                where: {
+                    ...(status && { status }),
+                    ...(faccaoId && { faccaoId })
+                }
+            })
+        ]);
+
+        return createPaginatedResponse(direcionamentos, total, pageNumber, pageLimit);
     }
 }
 

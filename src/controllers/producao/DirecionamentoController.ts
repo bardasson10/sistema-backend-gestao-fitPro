@@ -17,8 +17,8 @@ class CreateDirecionamentoController {
 
 class ListAllDirecionamentoController {
     async handle(req: Request, res: Response) {
-        const { status, faccaoId } = req.query;
-        const direcionamentos = await new ListAllDirecionamentoService().execute(status as string, faccaoId as string);
+        const { status, faccaoId, page, limit } = req.query;
+        const direcionamentos = await new ListAllDirecionamentoService().execute(status as string, faccaoId as string, page as string | number | undefined, limit as string | number | undefined);
         return res.json(direcionamentos);
     }
 }

@@ -1,92 +1,133 @@
 import { ICreateMovimentacaoEstoqueRequest } from "../../interfaces/IEstoque";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateMovimentacaoEstoqueService {
     async execute(usuarioId: string, { estoqueRoloId, tipoMovimentacao, pesoMovimentado }: ICreateMovimentacaoEstoqueRequest) {
-        // Verificar se estoque rolo existe
-        const rolo = await prismaClient.estoqueRolo.findUnique({
-            where: { id: estoqueRoloId }
-        });
-
-        if (!rolo) {
-            throw new Error("Rolo não encontrado.");
+        const peso = Number(pesoMovimentado);
+        if (!Number.isFinite(peso) || peso < 0) {
+            throw new Error("Peso movimentado inválido.");
         }
 
-        // Validações de lógica de negócio
-        if (tipoMovimentacao === "saida" || tipoMovimentacao === "ajuste") {
-            if (pesoMovimentado > rolo.pesoAtualKg.toNumber()) {
-                throw new Error("Peso da saída não pode ser maior que o peso atual do rolo.");
+        return prismaClient.$transaction(async (tx) => {
+            // Verificar se estoque rolo existe
+            const rolo = await tx.estoqueRolo.findUnique({
+                where: { id: estoqueRoloId }
+            });
+
+            if (!rolo) {
+                throw new Error("Rolo não encontrado.");
             }
-        }
 
-        // Registrar movimentação
-        const movimentacao = await prismaClient.movimentacaoEstoque.create({
-            data: {
-                estoqueRoloId,
-                usuarioId,
-                tipoMovimentacao,
-                pesoMovimentado
-            },
-            include: {
-                rolo: {
-                    include: {
-                        tecido: true
-                    }
+            // Validações de lógica de negócio
+            if (tipoMovimentacao === "saida" || tipoMovimentacao === "ajuste") {
+                if (peso > rolo.pesoAtualKg.toNumber()) {
+                    throw new Error("Peso da saída não pode ser maior que o peso atual do rolo.");
+                }
+            }
+
+            // Atualizar peso do rolo baseado no tipo de movimentação
+            let novoPeso = rolo.pesoAtualKg.toNumber();
+
+            if (tipoMovimentacao === "entrada") {
+                novoPeso = rolo.pesoAtualKg.toNumber() + peso;
+            } else if (tipoMovimentacao === "saida" || tipoMovimentacao === "devolucao") {
+                novoPeso = rolo.pesoAtualKg.toNumber() - peso;
+            } else if (tipoMovimentacao === "ajuste") {
+                novoPeso = peso;
+            }
+
+            // Atualizar rolo com novo peso
+            await tx.estoqueRolo.update({
+                where: { id: estoqueRoloId },
+                data: {
+                    pesoAtualKg: novoPeso
+                }
+            });
+
+            // Registrar movimentação
+            const movimentacao = await tx.movimentacaoEstoque.create({
+                data: {
+                    estoqueRoloId,
+                    usuarioId,
+                    tipoMovimentacao,
+                    pesoMovimentado: peso
                 },
-                usuario: true
-            }
+                include: {
+                    rolo: {
+                        include: {
+                            tecido: true
+                        }
+                    },
+                    usuario: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            funcaoSetor: true,
+                            perfil: true
+                        }
+                    }
+                }
+            });
+
+            return movimentacao;
         });
-
-        // Atualizar peso do rolo baseado no tipo de movimentação
-        let novoPheso = rolo.pesoAtualKg.toNumber();
-
-        if (tipoMovimentacao === "entrada") {
-            novoPheso = rolo.pesoAtualKg.toNumber() + pesoMovimentado;
-        } else if (tipoMovimentacao === "saida" || tipoMovimentacao === "devolucao") {
-            novoPheso = rolo.pesoAtualKg.toNumber() - pesoMovimentado;
-        } else if (tipoMovimentacao === "ajuste") {
-            novoPheso = pesoMovimentado;
-        }
-
-        // Atualizar rolo com novo peso
-        await prismaClient.estoqueRolo.update({
-            where: { id: estoqueRoloId },
-            data: {
-                pesoAtualKg: novoPheso
-            }
-        });
-
-        return movimentacao;
     }
 }
 
 class ListAllMovimentacaoEstoqueService {
-    async execute(estoqueRoloId?: string, tipoMovimentacao?: string, dataInicio?: string, dataFim?: string) {
-        const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
-            where: {
-                ...(estoqueRoloId && { estoqueRoloId }),
-                ...(tipoMovimentacao && { tipoMovimentacao }),
-                ...(dataInicio || dataFim ? {
-                    createdAt: {
-                        ...(dataInicio && { gte: new Date(dataInicio) }),
-                        ...(dataFim && { lte: new Date(dataFim) })
-                    }
-                } : {})
-            },
-            include: {
-                rolo: {
-                    include: {
-                        tecido: true
+    async execute(estoqueRoloId?: string, tipoMovimentacao?: string, dataInicio?: string, dataFim?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+
+        const [movimentacoes, total] = await Promise.all([
+            prismaClient.movimentacaoEstoque.findMany({
+                where: {
+                    ...(estoqueRoloId && { estoqueRoloId }),
+                    ...(tipoMovimentacao && { tipoMovimentacao }),
+                    ...(dataInicio || dataFim ? {
+                        createdAt: {
+                            ...(dataInicio && { gte: new Date(dataInicio) }),
+                            ...(dataFim && { lte: new Date(dataFim) })
+                        }
+                    } : {})
+                },
+                include: {
+                    rolo: {
+                        include: {
+                            tecido: true
+                        }
+                    },
+                    usuario: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            email: true,
+                            perfil: true,
+                            funcaoSetor: true,
+                        }
                     }
                 },
-                usuario: true
-            },
-            orderBy: {
-                createdAt: "desc"
-            }
-        });
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: "desc"
+                }
+            }),
+            prismaClient.movimentacaoEstoque.count({
+                where: {
+                    ...(estoqueRoloId && { estoqueRoloId }),
+                    ...(tipoMovimentacao && { tipoMovimentacao }),
+                    ...(dataInicio || dataFim ? {
+                        createdAt: {
+                            ...(dataInicio && { gte: new Date(dataInicio) }),
+                            ...(dataFim && { lte: new Date(dataFim) })
+                        }
+                    } : {})
+                }
+            })
+        ]);
 
-        return movimentacoes;
+        return createPaginatedResponse(movimentacoes, total, pageNumber, pageLimit);
     }
 }
 
@@ -100,7 +141,14 @@ class ListByIdMovimentacaoEstoqueService {
                         tecido: true
                     }
                 },
-                usuario: true
+                usuario: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        funcaoSetor: true,
+                        perfil: true
+                    }
+                }
             }
         });
 
@@ -125,7 +173,14 @@ class GetHistoricoRoloService {
         const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
             where: { estoqueRoloId },
             include: {
-                usuario: true
+                usuario: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        funcaoSetor: true,
+                        perfil: true
+                    }
+                }
             },
             orderBy: {
                 createdAt: "asc"

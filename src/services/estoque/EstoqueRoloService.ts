@@ -1,4 +1,5 @@
 import { ICreateEstoqueRoloRequest, IUpdateEstoqueRoloRequest } from "../../interfaces/IEstoque";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateEstoqueRoloService {
@@ -52,27 +53,39 @@ class CreateEstoqueRoloService {
 }
 
 class ListAllEstoqueRoloService {
-    async execute(tecidoId?: string, situacao?: string) {
-        const rolos = await prismaClient.estoqueRolo.findMany({
-            where: {
-                ...(tecidoId && { tecidoId }),
-                ...(situacao && { situacao })
-            },
-            include: {
-                tecido: {
-                    include: {
-                        fornecedor: true,
-                        cor: true
-                    }
-                },
-                movimentacoes: true
-            },
-            orderBy: {
-                createdAt: "desc"
-            }
-        });
+    async execute(tecidoId?: string, situacao?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return rolos;
+        const [rolos, total] = await Promise.all([
+            prismaClient.estoqueRolo.findMany({
+                where: {
+                    ...(tecidoId && { tecidoId }),
+                    ...(situacao && { situacao })
+                },
+                include: {
+                    tecido: {
+                        include: {
+                            fornecedor: true,
+                            cor: true
+                        }
+                    },
+                    movimentacoes: true
+                },
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: "desc"
+                }
+            }),
+            prismaClient.estoqueRolo.count({
+                where: {
+                    ...(tecidoId && { tecidoId }),
+                    ...(situacao && { situacao })
+                }
+            })
+        ]);
+
+        return createPaginatedResponse(rolos, total, pageNumber, pageLimit);
     }
 }
 
@@ -89,7 +102,14 @@ class ListByIdEstoqueRoloService {
                 },
                 movimentacoes: {
                     include: {
-                        usuario: true
+                        usuario: {
+                            select: {
+                                id: true,
+                                nome: true,
+                                funcaoSetor: true,
+                                perfil: true
+                            }
+                        }
                     }
                 }
             }

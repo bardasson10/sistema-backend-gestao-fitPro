@@ -3,10 +3,9 @@ import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProd
 
 class CreateLoteProducaoController {
     async handle(req: Request, res: Response) {
-        const { codigoLote, produtoId, tecidoId, responsavelId, status, observacao, items } = req.body;
+        const { codigoLote, tecidoId, responsavelId, status, observacao, items } = req.body;
         const lote = await new CreateLoteProducaoService().execute({
             codigoLote,
-            produtoId,
             tecidoId,
             responsavelId,
             status,
@@ -19,8 +18,8 @@ class CreateLoteProducaoController {
 
 class ListAllLoteProducaoController {
     async handle(req: Request, res: Response) {
-        const { status, responsavelId } = req.query;
-        const lotes = await new ListAllLoteProducaoService().execute(status as string, responsavelId as string);
+        const { status, responsavelId, page, limit } = req.query;
+        const lotes = await new ListAllLoteProducaoService().execute(status as string, responsavelId as string, page as string | number | undefined, limit as string);
         return res.json(lotes);
     }
 }

@@ -1,4 +1,5 @@
 import { ICreateCorRequest, IUpdateCorRequest } from "../../interfaces/IMaterial";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateCorService {
@@ -26,14 +27,25 @@ class CreateCorService {
 }
 
 class ListAllCorService {
-    async execute() {
-        const cores = await prismaClient.cor.findMany({
-            include: {
-                tecidos: true
-            }
-        });
+    async execute(page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return cores;
+        const [cores, total] = await Promise.all([
+            prismaClient.cor.findMany({
+                include: {
+                    tecidos: true
+                },
+                skip,
+                take: pageLimit,
+                // Replace 'createdAt' with a valid field from your Prisma 'cor' model, e.g., 'nome'
+                orderBy: {
+                    nome: 'desc'
+                }
+            }),
+            prismaClient.cor.count()
+        ]);
+
+        return createPaginatedResponse(cores, total, pageNumber, pageLimit);
     }
 }
 

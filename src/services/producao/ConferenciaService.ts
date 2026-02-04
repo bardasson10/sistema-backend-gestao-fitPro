@@ -1,4 +1,5 @@
 import { ICreateConferenciaRequest, IUpdateConferenciaRequest } from "../../interfaces/IProducao";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateConferenciaService {
@@ -59,32 +60,44 @@ class CreateConferenciaService {
 }
 
 class ListAllConferenciaService {
-    async execute(statusQualidade?: string, liberadoPagamento?: boolean) {
-        const conferencias = await prismaClient.conferencia.findMany({
-            where: {
-                ...(statusQualidade && { statusQualidade }),
-                ...(liberadoPagamento !== undefined && { liberadoPagamento })
-            },
-            include: {
-                direcionamento: {
-                    include: {
-                        lote: true,
-                        faccao: true
+    async execute(statusQualidade?: string, liberadoPagamento?: boolean, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+
+        const [conferencias, total] = await Promise.all([
+            prismaClient.conferencia.findMany({
+                where: {
+                    ...(statusQualidade && { statusQualidade }),
+                    ...(liberadoPagamento !== undefined && { liberadoPagamento })
+                },
+                include: {
+                    direcionamento: {
+                        include: {
+                            lote: true,
+                            faccao: true
+                        }
+                    },
+                    responsavel: true,
+                    items: {
+                        include: {
+                            tamanho: true
+                        }
                     }
                 },
-                responsavel: true,
-                items: {
-                    include: {
-                        tamanho: true
-                    }
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    dataConferencia: "desc"
                 }
-            },
-            orderBy: {
-                dataConferencia: "desc"
-            }
-        });
+            }),
+            prismaClient.conferencia.count({
+                where: {
+                    ...(statusQualidade && { statusQualidade }),
+                    ...(liberadoPagamento !== undefined && { liberadoPagamento })
+                }
+            })
+        ]);
 
-        return conferencias;
+        return createPaginatedResponse(conferencias, total, pageNumber, pageLimit);
     }
 }
 

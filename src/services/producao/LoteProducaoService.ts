@@ -1,8 +1,9 @@
 import { ICreateLoteProducaoRequest, IUpdateLoteProducaoRequest } from "../../interfaces/IProducao";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateLoteProducaoService {
-    async execute({ codigoLote, produtoId, tecidoId, responsavelId, status, observacao, items }: ICreateLoteProducaoRequest) {
+    async execute({ codigoLote, tecidoId, responsavelId, status, observacao, items }: ICreateLoteProducaoRequest) {
         // Verificar se código de lote já existe
         const loteAlreadyExists = await prismaClient.loteProducao.findUnique({
             where: { codigoLote }
@@ -10,15 +11,6 @@ class CreateLoteProducaoService {
 
         if (loteAlreadyExists) {
             throw new Error("Lote com este código já existe.");
-        }
-
-        // Verificar se produto existe
-        const produto = await prismaClient.produto.findUnique({
-            where: { id: produtoId }
-        });
-
-        if (!produto) {
-            throw new Error("Produto não encontrado.");
         }
 
         // Verificar se tecido existe
@@ -39,28 +31,51 @@ class CreateLoteProducaoService {
             throw new Error("Responsável não encontrado.");
         }
 
+        // Validar items se fornecidos
+        if (items && items.length > 0) {
+            // Verificar se produtos e tamanhos existem
+            const produtoIds = [...new Set(items.map(item => item.produtoId))];
+            const tamanhoIds = [...new Set(items.map(item => item.tamanhoId))];
+
+            const produtos = await prismaClient.produto.findMany({
+                where: { id: { in: produtoIds } }
+            });
+
+            if (produtos.length !== produtoIds.length) {
+                throw new Error("Um ou mais produtos não encontrados.");
+            }
+
+            const tamanhos = await prismaClient.tamanho.findMany({
+                where: { id: { in: tamanhoIds } }
+            });
+
+            if (tamanhos.length !== tamanhoIds.length) {
+                throw new Error("Um ou mais tamanhos não encontrados.");
+            }
+        }
+
         // Criar lote com items
         const lote = await prismaClient.loteProducao.create({
             data: {
                 codigoLote,
-                produtoId,
                 tecidoId,
                 responsavelId,
                 status: status || "planejado",
                 observacao,
                 items: items ? {
                     create: items.map(item => ({
+                        produtoId: item.produtoId,
                         tamanhoId: item.tamanhoId,
                         quantidadePlanejada: item.quantidadePlanejada
                     }))
                 } : undefined
             },
             include: {
-                produto: true,
                 tecido: true,
                 responsavel: true,
                 items: {
                     include: {
+                        produto: true,
                         tamanho: true
                     }
                 },
@@ -73,29 +88,41 @@ class CreateLoteProducaoService {
 }
 
 class ListAllLoteProducaoService {
-    async execute(status?: string, responsavelId?: string) {
-        const lotes = await prismaClient.loteProducao.findMany({
-            where: {
-                ...(status && { status }),
-                ...(responsavelId && { responsavelId })
-            },
-            include: {
-                produto: true,
-                tecido: true,
-                responsavel: true,
-                items: {
-                    include: {
-                        tamanho: true
-                    }
-                },
-                direcionamentos: true
-            },
-            orderBy: {
-                createdAt: "desc"
-            }
-        });
+    async execute(status?: string, responsavelId?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return lotes;
+        const [lotes, total] = await Promise.all([
+            prismaClient.loteProducao.findMany({
+                where: {
+                    ...(status && { status }),
+                    ...(responsavelId && { responsavelId })
+                },
+                include: {
+                    tecido: true,
+                    responsavel: true,
+                    items: {
+                        include: {
+                            produto: true,
+                            tamanho: true
+                        }
+                    },
+                    direcionamentos: true
+                },
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: "desc"
+                }
+            }),
+            prismaClient.loteProducao.count({
+                where: {
+                    ...(status && { status }),
+                    ...(responsavelId && { responsavelId })
+                }
+            })
+        ]);
+
+        return createPaginatedResponse(lotes, total, pageNumber, pageLimit);
     }
 }
 
@@ -104,11 +131,11 @@ class ListByIdLoteProducaoService {
         const lote = await prismaClient.loteProducao.findUnique({
             where: { id },
             include: {
-                produto: true,
                 tecido: true,
                 responsavel: true,
                 items: {
                     include: {
+                        produto: true,
                         tamanho: true
                     }
                 },
@@ -158,11 +185,11 @@ class UpdateLoteProducaoService {
                 observacao
             },
             include: {
-                produto: true,
                 tecido: true,
                 responsavel: true,
                 items: {
                     include: {
+                        produto: true,
                         tamanho: true
                     }
                 },

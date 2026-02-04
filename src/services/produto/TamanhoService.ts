@@ -1,4 +1,5 @@
 import { ICreateTamanhoRequest, IUpdateTamanhoRequest } from "../../interfaces/IProduto";
+import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 class CreateTamanhoService {
@@ -23,14 +24,22 @@ class CreateTamanhoService {
 }
 
 class ListAllTamanhoService {
-    async execute() {
-        const tamanhos = await prismaClient.tamanho.findMany({
-            orderBy: {
-                ordem: "asc"
-            }
-        });
+    async execute(page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        return tamanhos;
+        const [tamanhos, total] = await Promise.all([
+            prismaClient.tamanho.findMany({
+                skip,
+                take: pageLimit,
+                orderBy: [
+                    { ordem: 'asc' },
+                    { nome: 'desc' }
+                ]
+            }),
+            prismaClient.tamanho.count()
+        ]);
+
+        return createPaginatedResponse(tamanhos, total, pageNumber, pageLimit);
     }
 }
 
