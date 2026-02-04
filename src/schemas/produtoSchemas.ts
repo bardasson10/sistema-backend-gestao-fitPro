@@ -11,7 +11,7 @@ export const updateTipoProdutoSchema = z.object({
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
     }),
     params: z.object({
-        id: z.string().uuid("ID inválido"),
+        id: z.uuid("ID inválido"),
     }),
 });
 
@@ -28,13 +28,13 @@ export const updateTamanhoSchema = z.object({
         ordem: z.number().int().positive("Ordem deve ser um número positivo").optional(),
     }),
     params: z.object({
-        id: z.string().uuid("ID inválido"),
+        id: z.uuid("ID inválido"),
     }),
 });
 
 export const createProdutoSchema = z.object({
     body: z.object({
-        tipoProdutoId: z.string().uuid("ID de tipo inválido"),
+        tipoProdutoId: z.uuid("ID de tipo inválido"),
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
         sku: z.string().min(1, "SKU é obrigatório"),
         fabricante: z.string().optional(),
@@ -45,7 +45,7 @@ export const createProdutoSchema = z.object({
 
 export const updateProdutoSchema = z.object({
     body: z.object({
-        tipoProdutoId: z.string().uuid("ID de tipo inválido").optional(),
+        tipoProdutoId: z.uuid("ID de tipo inválido").optional(),
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
         sku: z.string().min(1, "SKU é obrigatório").optional(),
         fabricante: z.string().optional(),
@@ -53,13 +53,13 @@ export const updateProdutoSchema = z.object({
         precoMedioVenda: z.number().positive("Preço deve ser positivo").optional(),
     }),
     params: z.object({
-        id: z.string().uuid("ID inválido"),
+        id: z.uuid("ID inválido"),
     }),
 });
 
 export const createTipoProdutoTamanhoSchema = z.object({
     body: z.object({
-        tipoProdutoId: z.string().uuid("ID de tipo inválido"),
-        tamanhoId: z.string().uuid("ID de tamanho inválido"),
+        tipoProdutoId: z.uuid("ID de tipo inválido"),
+        tamanhoId: z.uuid("ID de tamanho inválido"),
     }),
 });

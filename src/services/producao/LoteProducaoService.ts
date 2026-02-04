@@ -75,8 +75,8 @@ class CreateLoteProducaoService {
                 responsavel: true,
                 items: {
                     include: {
-                        produto: true,
-                        tamanho: true
+                        tamanho: true,
+                        produto: true
                     }
                 },
                 direcionamentos: true

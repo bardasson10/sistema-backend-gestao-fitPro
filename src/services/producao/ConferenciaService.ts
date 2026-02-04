@@ -110,10 +110,10 @@ class ListByIdConferenciaService {
                     include: {
                         lote: {
                             include: {
-                                produto: true,
                                 tecido: true,
                                 items: {
                                     include: {
+                                        produto: true,
                                         tamanho: true
                                     }
                                 }

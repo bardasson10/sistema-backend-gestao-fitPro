@@ -15,7 +15,7 @@ export const updateFornecedorSchema = z.object({
         contato: z.string().optional(),
     }),
     params: z.object({
-        id: z.string().uuid("ID inválido"),
+        id: z.uuid("ID inválido"),
     }),
 });
 
@@ -32,14 +32,14 @@ export const updateCorSchema = z.object({
         codigoHex: z.string().regex(/^#[0-9A-F]{6}$/i, "Código HEX inválido (ex: #FFFFFF)").optional(),
     }),
     params: z.object({
-        id: z.string().uuid("ID inválido"),
+        id: z.uuid("ID inválido"),
     }),
 });
 
 export const createTecidoSchema = z.object({
     body: z.object({
-        fornecedorId: z.string().uuid("ID de fornecedor inválido"),
-        corId: z.string().uuid("ID de cor inválido"),
+        fornecedorId: z.uuid("ID de fornecedor inválido"),
+        corId: z.uuid("ID de cor inválido"),
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
         codigoReferencia: z.string().optional(),
         rendimentoMetroKg: z.number().positive("Rendimento deve ser positivo").optional(),
@@ -51,8 +51,8 @@ export const createTecidoSchema = z.object({
 
 export const updateTecidoSchema = z.object({
     body: z.object({
-        fornecedorId: z.string().uuid("ID de fornecedor inválido").optional(),
-        corId: z.string().uuid("ID de cor inválido").optional(),
+        fornecedorId: z.uuid("ID de fornecedor inválido").optional(),
+        corId: z.uuid("ID de cor inválido").optional(),
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
         codigoReferencia: z.string().optional(),
         rendimentoMetroKg: z.number().positive("Rendimento deve ser positivo").optional(),
@@ -61,6 +61,6 @@ export const updateTecidoSchema = z.object({
         gramatura: z.number().positive("Gramatura deve ser positiva").optional(),
     }),
     params: z.object({
-        id: z.string().uuid("ID inválido"),
+        id: z.uuid("ID inválido"),
     }),
 });

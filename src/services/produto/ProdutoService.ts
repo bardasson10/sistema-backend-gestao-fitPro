@@ -33,7 +33,7 @@ class CreateProdutoService {
             },
             include: {
                 tipo: true,
-                lotes: true
+                loteItems: true
             }
         });
 
@@ -50,7 +50,7 @@ class ListAllProdutoService {
                 where: tipoProdutoId ? { tipoProdutoId } : undefined,
                 include: {
                     tipo: true,
-                    lotes: true
+                    loteItems: true
                 },
                 skip,
                 take: pageLimit,
@@ -73,7 +73,7 @@ class ListByIdProdutoService {
             where: { id },
             include: {
                 tipo: true,
-                lotes: true
+                loteItems: true
             }
         });
 
@@ -122,7 +122,7 @@ class UpdateProdutoService {
             data,
             include: {
                 tipo: true,
-                lotes: true
+                loteItems: true
             }
         });
 
@@ -135,7 +135,7 @@ class DeleteProdutoService {
         const produto = await prismaClient.produto.findUnique({
             where: { id },
             include: {
-                lotes: true
+                loteItems: true
             }
         });
 
@@ -143,8 +143,8 @@ class DeleteProdutoService {
             throw new Error("Produto não encontrado.");
         }
 
-        if (produto.lotes.length > 0) {
-            throw new Error("Não é possível deletar um produto que possui lotes de produção associados.");
+        if (produto.loteItems.length > 0) {
+            throw new Error("Não é possível deletar um produto que possui itens de lote associados.");
         }
 
         await prismaClient.produto.delete({

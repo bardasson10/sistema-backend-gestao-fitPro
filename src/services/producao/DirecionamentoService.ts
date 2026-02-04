@@ -39,11 +39,16 @@ class CreateDirecionamentoService {
             },
             include: {
                 lote: {
-                    include: {
-                        produto: true,
-                        tecido: true
-                    }
-                },
+                        include: {
+                            tecido: true,
+                            items: {
+                                include: {
+                                    produto: true,
+                                    tamanho: true
+                                }
+                            }
+                        }
+                    },
                 faccao: true,
                 conferencias: true
             }
@@ -66,8 +71,13 @@ class ListAllDirecionamentoService {
                 include: {
                     lote: {
                         include: {
-                            produto: true,
-                            tecido: true
+                            tecido: true,
+                            items: {
+                                include: {
+                                    produto: true,
+                                    tamanho: true
+                                }
+                            }
                         }
                     },
                     faccao: true,
@@ -98,11 +108,11 @@ class ListByIdDirecionamentoService {
             include: {
                 lote: {
                     include: {
-                        produto: true,
                         tecido: true,
                         responsavel: true,
                         items: {
                             include: {
+                                produto: true,
                                 tamanho: true
                             }
                         }
@@ -162,8 +172,13 @@ class UpdateDirecionamentoService {
             include: {
                 lote: {
                     include: {
-                        produto: true,
-                        tecido: true
+                        tecido: true,
+                        items: {
+                            include: {
+                                produto: true,
+                                tamanho: true
+                            }
+                        }
                     }
                 },
                 faccao: true,
