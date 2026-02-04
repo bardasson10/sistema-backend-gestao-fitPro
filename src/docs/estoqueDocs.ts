@@ -59,7 +59,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -87,7 +87,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
                 }
             },
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         security: [{ bearerAuth: [] }],
@@ -110,7 +110,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -186,7 +186,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -208,7 +208,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                estoqueRoloId: z.string().uuid()
+                estoqueRoloId: z.uuid()
             })
         },
         responses: {

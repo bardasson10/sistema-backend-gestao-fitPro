@@ -62,7 +62,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -90,7 +90,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
                 }
             },
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         security: [{ bearerAuth: [] }],
@@ -113,7 +113,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -175,7 +175,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -203,7 +203,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
                 }
             },
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         security: [{ bearerAuth: [] }],
@@ -226,7 +226,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -288,7 +288,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -316,7 +316,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
                 }
             },
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         security: [{ bearerAuth: [] }],
@@ -339,7 +339,7 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {

@@ -154,6 +154,8 @@ model EstoqueRolo {
   tecido            Tecido   @relation(fields: [tecidoId], references: [id])
   movimentacoes     MovimentacaoEstoque[]
 
+  @@index([tecidoId])
+  @@index([situacao])
   @@map("estoque_rolo")
 }
 
@@ -168,6 +170,9 @@ model MovimentacaoEstoque {
   rolo              EstoqueRolo @relation(fields: [estoqueRoloId], references: [id])
   usuario           Usuario     @relation(fields: [usuarioId], references: [id])
 
+  @@index([estoqueRoloId])
+  @@index([usuarioId])
+  @@index([createdAt])
   @@map("movimentacao_estoque")
 }
 
@@ -208,6 +213,7 @@ model LoteProducao {
   items          LoteItem[]
   direcionamentos Direcionamento[]
 
+  @@index([status])
   @@map("lote_producao")
 }
 
@@ -238,6 +244,7 @@ model Direcionamento {
   faccao              Faccao       @relation(fields: [faccaoId], references: [id])
   conferencias        Conferencia[]
 
+  @@index([status])
   @@map("direcionamento")
 }
 
@@ -256,6 +263,7 @@ model Conferencia {
   responsavel        Usuario        @relation(fields: [responsavelId], references: [id])
   items              ConferenciaItem[]
 
+  @@index([dataConferencia])
   @@map("conferencia")
 }
 
@@ -271,3 +279,5 @@ model ConferenciaItem {
 
   @@map("conferencia_item")
 }
+
+

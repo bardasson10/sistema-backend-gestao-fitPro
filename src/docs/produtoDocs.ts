@@ -68,7 +68,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -96,7 +96,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
                 }
             },
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         security: [{ bearerAuth: [] }],
@@ -119,7 +119,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -181,7 +181,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -209,7 +209,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
                 }
             },
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         security: [{ bearerAuth: [] }],
@@ -232,7 +232,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -294,7 +294,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -322,7 +322,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
                 }
             },
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         security: [{ bearerAuth: [] }],
@@ -345,7 +345,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
@@ -393,7 +393,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                tipoProdutoId: z.string().uuid()
+                tipoProdutoId: z.uuid()
             })
         },
         responses: {
@@ -415,7 +415,7 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.string().uuid()
+                id: z.uuid()
             })
         },
         responses: {
