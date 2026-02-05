@@ -40,8 +40,29 @@ export const createLoteProducaoSchema = z.object({
 
 export const updateLoteProducaoSchema = z.object({
     body: z.object({
+        codigoLote: z.string().min(1, "Código do lote é obrigatório").optional(),
+        tecidoId: z.uuid("ID de tecido inválido").optional(),
+        responsavelId: z.uuid("ID de responsável inválido").optional(),
         status: z.enum(["planejado", "em_producao", "concluido", "cancelado"]).optional(),
         observacao: z.string().optional(),
+        items: z.array(z.object({
+            produtoId: z.uuid("ID de produto inválido"),
+            tamanhoId: z.uuid("ID de tamanho inválido"),
+            quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
+        })).optional(),
+    }),
+    params: z.object({
+        id: z.uuid("ID inválido"),
+    }),
+});
+
+export const addLoteItemsSchema = z.object({
+    body: z.object({
+        items: z.array(z.object({
+            produtoId: z.uuid("ID de produto inválido"),
+            tamanhoId: z.uuid("ID de tamanho inválido"),
+            quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
+        })).min(1, "Informe ao menos um item"),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),

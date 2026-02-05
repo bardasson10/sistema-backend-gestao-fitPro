@@ -32,8 +32,16 @@ export interface ICreateLoteProducaoRequest {
 }
 
 export interface IUpdateLoteProducaoRequest {
+    codigoLote?: string;
+    tecidoId?: string;
+    responsavelId?: string;
     status?: string;
     observacao?: string;
+    items?: ILoteItemInput[];
+}
+
+export interface IAddLoteItemsRequest {
+    items: ILoteItemInput[];
 }
 
 export interface ILoteProducaoResponse {
@@ -51,7 +59,7 @@ export interface ILoteProducaoResponse {
 export interface ICreateDirecionamentoRequest {
     loteProducaoId: string;
     faccaoId: string;
-    tipoServico: "costura" | "estampa" | "tingimento" | "acabamento" | "outro";
+    tipoServico: "costura" | "estampa" | "tingimento" | "acabamento" | "corte" | "outro";
     dataSaida?: string;
     dataPrevisaoRetorno?: string;
 }

@@ -1,4 +1,4 @@
-import { ICreateLoteProducaoRequest, IUpdateLoteProducaoRequest } from "../../interfaces/IProducao";
+import { IAddLoteItemsRequest, ICreateLoteProducaoRequest, IUpdateLoteProducaoRequest } from "../../interfaces/IProducao";
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
@@ -157,7 +157,7 @@ class ListByIdLoteProducaoService {
 }
 
 class UpdateLoteProducaoService {
-    async execute(id: string, { status, observacao }: IUpdateLoteProducaoRequest) {
+    async execute(id: string, { codigoLote, tecidoId, responsavelId, status, observacao, items }: IUpdateLoteProducaoRequest) {
         const lote = await prismaClient.loteProducao.findUnique({
             where: { id }
         });
@@ -178,9 +178,78 @@ class UpdateLoteProducaoService {
             throw new Error(`Não é permitido mudar status de '${lote.status}' para '${status}'.`);
         }
 
+        // Se codigoLote foi mudado, verificar se já existe outro lote com esse código
+        if (codigoLote && codigoLote !== lote.codigoLote) {
+            const loteComMesmoCodigo = await prismaClient.loteProducao.findUnique({
+                where: { codigoLote }
+            });
+            if (loteComMesmoCodigo) {
+                throw new Error("Já existe outro lote com este código.");
+            }
+        }
+
+        // Se tecidoId foi fornecido, validar
+        if (tecidoId) {
+            const tecido = await prismaClient.tecido.findUnique({
+                where: { id: tecidoId }
+            });
+            if (!tecido) {
+                throw new Error("Tecido não encontrado.");
+            }
+        }
+
+        // Se responsavelId foi fornecido, validar
+        if (responsavelId) {
+            const responsavel = await prismaClient.usuario.findUnique({
+                where: { id: responsavelId }
+            });
+            if (!responsavel) {
+                throw new Error("Responsável não encontrado.");
+            }
+        }
+
+        // Se items foram fornecidos, validar e criar
+        if (items && items.length > 0) {
+            if (["concluido", "cancelado"].includes(lote.status)) {
+                throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
+            }
+
+            const produtoIds = [...new Set(items.map(item => item.produtoId))];
+            const tamanhoIds = [...new Set(items.map(item => item.tamanhoId))];
+
+            const produtos = await prismaClient.produto.findMany({
+                where: { id: { in: produtoIds } }
+            });
+
+            if (produtos.length !== produtoIds.length) {
+                throw new Error("Um ou mais produtos não encontrados.");
+            }
+
+            const tamanhos = await prismaClient.tamanho.findMany({
+                where: { id: { in: tamanhoIds } }
+            });
+
+            if (tamanhos.length !== tamanhoIds.length) {
+                throw new Error("Um ou mais tamanhos não encontrados.");
+            }
+
+            // Adicionar novos items
+            await prismaClient.loteItem.createMany({
+                data: items.map(item => ({
+                    loteProducaoId: id,
+                    produtoId: item.produtoId,
+                    tamanhoId: item.tamanhoId,
+                    quantidadePlanejada: item.quantidadePlanejada
+                }))
+            });
+        }
+
         const loteAtualizado = await prismaClient.loteProducao.update({
             where: { id },
             data: {
+                ...(codigoLote && { codigoLote }),
+                ...(tecidoId && { tecidoId }),
+                ...(responsavelId && { responsavelId }),
                 status,
                 observacao
             },
@@ -195,6 +264,73 @@ class UpdateLoteProducaoService {
                 },
                 direcionamentos: true
             }
+        });
+
+        return loteAtualizado;
+    }
+}
+
+class AddLoteItemsService {
+    async execute(id: string, { items }: IAddLoteItemsRequest) {
+        if (!items || items.length === 0) {
+            throw new Error("Informe ao menos um item.");
+        }
+
+        const loteAtualizado = await prismaClient.$transaction(async (tx) => {
+            const lote = await tx.loteProducao.findUnique({
+                where: { id }
+            });
+
+            if (!lote) {
+                throw new Error("Lote não encontrado.");
+            }
+
+            if (["concluido", "cancelado"].includes(lote.status)) {
+                throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
+            }
+
+            const produtoIds = [...new Set(items.map(item => item.produtoId))];
+            const tamanhoIds = [...new Set(items.map(item => item.tamanhoId))];
+
+            const produtos = await tx.produto.findMany({
+                where: { id: { in: produtoIds } }
+            });
+
+            if (produtos.length !== produtoIds.length) {
+                throw new Error("Um ou mais produtos não encontrados.");
+            }
+
+            const tamanhos = await tx.tamanho.findMany({
+                where: { id: { in: tamanhoIds } }
+            });
+
+            if (tamanhos.length !== tamanhoIds.length) {
+                throw new Error("Um ou mais tamanhos não encontrados.");
+            }
+
+            await tx.loteItem.createMany({
+                data: items.map(item => ({
+                    loteProducaoId: id,
+                    produtoId: item.produtoId,
+                    tamanhoId: item.tamanhoId,
+                    quantidadePlanejada: item.quantidadePlanejada
+                }))
+            });
+
+            return tx.loteProducao.findUnique({
+                where: { id },
+                include: {
+                    tecido: true,
+                    responsavel: true,
+                    items: {
+                        include: {
+                            produto: true,
+                            tamanho: true
+                        }
+                    },
+                    direcionamentos: true
+                }
+            });
         });
 
         return loteAtualizado;
@@ -233,4 +369,4 @@ class DeleteLoteProducaoService {
     }
 }
 
-export { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, DeleteLoteProducaoService };
+export { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, DeleteLoteProducaoService };

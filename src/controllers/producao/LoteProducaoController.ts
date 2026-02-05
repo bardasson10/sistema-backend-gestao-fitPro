@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, DeleteLoteProducaoService } from "../../services/producao/LoteProducaoService";
+import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, DeleteLoteProducaoService } from "../../services/producao/LoteProducaoService";
 
 class CreateLoteProducaoController {
     async handle(req: Request, res: Response) {
@@ -44,6 +44,15 @@ class UpdateLoteProducaoController {
     }
 }
 
+class AddLoteItemsController {
+    async handle(req: Request, res: Response) {
+        const id = req.params.id as string
+        const { items } = req.body;
+        const lote = await new AddLoteItemsService().execute(id, { items });
+        return res.json(lote);
+    }
+}
+
 class DeleteLoteProducaoController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string 
@@ -52,4 +61,4 @@ class DeleteLoteProducaoController {
     }
 }
 
-export { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, DeleteLoteProducaoController };
+export { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, DeleteLoteProducaoController };

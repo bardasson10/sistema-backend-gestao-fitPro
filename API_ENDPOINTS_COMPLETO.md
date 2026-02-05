@@ -597,21 +597,23 @@ Content-Type: application/json
 
 {
   "codigoLote": "LOTE-2026-001",
-  "produtoId": "uuid-produto",
   "tecidoId": "uuid-tecido",
   "responsavelId": "uuid-usuario",
   "status": "planejado",
   "observacao": "Lote de teste",
   "items": [
     {
+      "produtoId": "uuid-produto-1",
       "tamanhoId": "uuid-tamanho-P",
       "quantidadePlanejada": 50
     },
     {
+      "produtoId": "uuid-produto-2",
       "tamanhoId": "uuid-tamanho-M",
       "quantidadePlanejada": 100
     },
     {
+      "produtoId": "uuid-produto-2",
       "tamanhoId": "uuid-tamanho-G",
       "quantidadePlanejada": 50
     }
@@ -630,19 +632,19 @@ Content-Type: application/json
 {
   "id": "uuid",
   "codigoLote": "LOTE-2026-001",
-  "produtoId": "uuid-produto",
   "tecidoId": "uuid-tecido",
   "responsavelId": "uuid-usuario",
   "status": "planejado",
   "observacao": "Lote de teste",
-  "produto": { ... },
   "tecido": { ... },
   "responsavel": { ... },
   "items": [
     {
       "id": "uuid",
+      "produtoId": "uuid-produto-1",
       "tamanhoId": "uuid-tamanho-P",
       "quantidadePlanejada": 50,
+      "produto": { ... },
       "tamanho": { ... }
     }
   ],
@@ -659,17 +661,33 @@ Authorization: Bearer <token>
 
 ### GET /lotes-producao/:id - Buscar Lote
 
-### PUT /lotes-producao/:id - Atualizar Status
+### PUT /lotes-producao/:id - Atualizar Lote
 ```http
 PUT /lotes-producao/uuid
 Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "status": "em_producao",
-  "observacao": "Iniciando produção"
+  "codigoLote": "LOTE-2026-001",
+  "tecidoId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "responsavelId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "status": "planejado",
+  "observacao": "string",
+  "items": [
+    {
+      "produtoId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "tamanhoId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "quantidadePlanejada": 1
+    }
+  ]
 }
 ```
+
+**Obs:** Todos os campos são opcionais. Pode enviar apenas alguns campos para atualizar:
+- Só `status` e `observacao` para mudar estado
+- `items` para adicionar produtos/tamanhos
+- `codigoLote`, `tecidoId`, `responsavelId` para alterar dados principais
+- Qualquer combinação desses campos
 
 **Transições Válidas:**
 - `planejado` → `em_producao` ou `cancelado`
@@ -703,6 +721,7 @@ Content-Type: application/json
 - `estampa`: Serviço de estampa
 - `tingimento`: Serviço de tingimento
 - `acabamento`: Serviço de acabamento
+- `corte`: Serviço de corte
 - `outro`: Outro tipo
 
 **Status:**
@@ -785,6 +804,7 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
+  "dataConferencia": "2026-02-10",
   "statusQualidade": "com_defeito",
   "liberadoPagamento": false,
   "observacao": "Encontrado defeitos na costura"
@@ -867,10 +887,13 @@ Authorization: Bearer <token>
     POST /faccoes { nome, ... }
 
 11. Criar Lote de Produção
-    POST /lotes-producao { codigoLote, produtoId, tecidoId, ..., items }
+    POST /lotes-producao { codigoLote, tecidoId, ..., items (com produtoId) }
 
 12. Atualizar Status do Lote (em_producao)
     PUT /lotes-producao/:id { status: "em_producao" }
+
+12.1. Adicionar Itens ao Lote (quando necessário)
+     POST /lotes-producao/:id/items { items }
 
 13. Criar Direcionamento para Facção
     POST /direcionamentos { loteProducaoId, faccaoId, tipoServico, ... }
@@ -906,6 +929,7 @@ Authorization: Bearer <token>
 | POST /movimentacoes-estoque | ✓ | ✓ | ✓ |
 | POST /lotes-producao | ✓ | ✓ | ✗ |
 | PUT /lotes-producao | ✓ | ✓ | ✗ |
+| POST /lotes-producao/:id/items | ✓ | ✓ | ✗ |
 | POST /conferencias | ✓ | ✓ | ✓ |
 | PUT /conferencias | ✓ | ✓ | ✗ |
 

@@ -30,10 +30,10 @@ import { createEstoqueRoloSchema, updateEstoqueRoloSchema, createMovimentacaoEst
 
 // Produção Controllers
 import { CreateFaccaoController, ListAllFaccaoController, ListByIdFaccaoController, UpdateFaccaoController, DeleteFaccaoController } from "./controllers/producao/FaccaoController";
-import { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, DeleteLoteProducaoController } from "./controllers/producao/LoteProducaoController";
+import { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, DeleteLoteProducaoController } from "./controllers/producao/LoteProducaoController";
 import { CreateDirecionamentoController, ListAllDirecionamentoController, ListByIdDirecionamentoController, UpdateDirecionamentoController, DeleteDirecionamentoController } from "./controllers/producao/DirecionamentoController";
 import { CreateConferenciaController, ListAllConferenciaController, ListByIdConferenciaController, UpdateConferenciaController, DeleteConferenciaController, GetRelatorioProdutividadeController } from "./controllers/producao/ConferenciaController";
-import { createFaccaoSchema, updateFaccaoSchema, createLoteProducaoSchema, updateLoteProducaoSchema, createDirecionamentoSchema, updateDirecionamentoSchema, createConferenciaSchema, updateConferenciaSchema } from "./schemas/producaoSchemas";
+import { createFaccaoSchema, updateFaccaoSchema, createLoteProducaoSchema, updateLoteProducaoSchema, addLoteItemsSchema, createDirecionamentoSchema, updateDirecionamentoSchema, createConferenciaSchema, updateConferenciaSchema } from "./schemas/producaoSchemas";
 
 
 const router = Router();
@@ -118,6 +118,7 @@ router.post("/lotes-producao", isAuthenticated, validateSchema(createLoteProduca
 router.get("/lotes-producao", isAuthenticated, new ListAllLoteProducaoController().handle);
 router.get("/lotes-producao/:id", isAuthenticated, new ListByIdLoteProducaoController().handle);
 router.put("/lotes-producao/:id", isAuthenticated, validateSchema(updateLoteProducaoSchema), new UpdateLoteProducaoController().handle);
+router.post("/lotes-producao/:id/items", isAuthenticated, validateSchema(addLoteItemsSchema), new AddLoteItemsController().handle);
 router.delete("/lotes-producao/:id", isAuthenticated, isAdmin, new DeleteLoteProducaoController().handle);
 
 // ==================== DIRECIONAMENTOS ====================
