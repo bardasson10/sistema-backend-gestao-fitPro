@@ -3,7 +3,7 @@ import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } fro
 import prismaClient from "../../prisma";
 
 class CreateConferenciaService {
-    async execute({ direcionamentoId, responsavelId, dataConferencia, statusQualidade, observacao, items }: ICreateConferenciaRequest) {
+    async execute({ direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items }: ICreateConferenciaRequest) {
         // Verificar se direcionamento existe
         const direcionamento = await prismaClient.direcionamento.findUnique({
             where: { id: direcionamentoId }
@@ -22,15 +22,23 @@ class CreateConferenciaService {
             throw new Error("Responsável não encontrado.");
         }
 
+        // Validar regra: só pode liberar pagamento se statusQualidade for "conforme"
+        const statusFinal = statusQualidade || "conforme";
+        const liberadoFinal = liberadoPagamento !== undefined ? liberadoPagamento : false;
+        
+        if (liberadoFinal && statusFinal !== "conforme") {
+            throw new Error("Não é possível liberar pagamento para conferências não conformes.");
+        }
+
         // Criar conferência com items
         const conferencia = await prismaClient.conferencia.create({
             data: {
                 direcionamentoId,
                 responsavelId,
                 dataConferencia: dataConferencia ? new Date(dataConferencia) : new Date(),
-                statusQualidade: statusQualidade || "conforme",
+                statusQualidade: statusFinal,
                 observacao,
-                liberadoPagamento: false,
+                liberadoPagamento: liberadoFinal,
                 items: items ? {
                     create: items.map(item => ({
                         tamanhoId: item.tamanhoId,
@@ -140,7 +148,7 @@ class ListByIdConferenciaService {
 }
 
 class UpdateConferenciaService {
-    async execute(id: string, { dataConferencia, statusQualidade, liberadoPagamento, observacao }: IUpdateConferenciaRequest) {
+    async execute(id: string, { direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items }: IUpdateConferenciaRequest) {
         const conferencia = await prismaClient.conferencia.findUnique({
             where: { id }
         });
@@ -149,33 +157,72 @@ class UpdateConferenciaService {
             throw new Error("Conferência não encontrada.");
         }
 
-        // Se mudar status para não conforme, não pode liberar pagamento
-        if (statusQualidade && statusQualidade !== "conforme" && liberadoPagamento === true) {
+        const statusFinal = statusQualidade ?? conferencia.statusQualidade;
+        if (liberadoPagamento === true && statusFinal !== "conforme") {
             throw new Error("Não é possível liberar pagamento para conferências não conforme.");
         }
 
-        const conferenciaAtualizada = await prismaClient.conferencia.update({
-            where: { id },
-            data: {
-                dataConferencia: dataConferencia ? new Date(dataConferencia) : undefined,
-                statusQualidade,
-                liberadoPagamento,
-                observacao
-            },
-            include: {
-                direcionamento: {
-                    include: {
-                        lote: true,
-                        faccao: true
-                    }
-                },
-                responsavel: true,
-                items: {
-                    include: {
-                        tamanho: true
-                    }
+        const conferenciaAtualizada = await prismaClient.$transaction(async (tx) => {
+            if (direcionamentoId) {
+                const direcionamento = await tx.direcionamento.findUnique({
+                    where: { id: direcionamentoId }
+                });
+                if (!direcionamento) {
+                    throw new Error("Direcionamento não encontrado.");
                 }
             }
+
+            if (responsavelId) {
+                const responsavel = await tx.usuario.findUnique({
+                    where: { id: responsavelId }
+                });
+                if (!responsavel) {
+                    throw new Error("Responsável não encontrado.");
+                }
+            }
+
+            if (items) {
+                await tx.conferenciaItem.deleteMany({
+                    where: { conferenciaId: id }
+                });
+
+                if (items.length > 0) {
+                    await tx.conferenciaItem.createMany({
+                        data: items.map(item => ({
+                            conferenciaId: id,
+                            tamanhoId: item.tamanhoId,
+                            qtdRecebida: item.qtdRecebida,
+                            qtdDefeito: item.qtdDefeito || 0
+                        }))
+                    });
+                }
+            }
+
+            return tx.conferencia.update({
+                where: { id },
+                data: {
+                    ...(direcionamentoId && { direcionamentoId }),
+                    ...(responsavelId && { responsavelId }),
+                    ...(dataConferencia && { dataConferencia: new Date(dataConferencia) }),
+                    ...(statusQualidade && { statusQualidade }),
+                    ...(liberadoPagamento !== undefined && { liberadoPagamento }),
+                    ...(observacao !== undefined && { observacao })
+                },
+                include: {
+                    direcionamento: {
+                        include: {
+                            lote: true,
+                            faccao: true
+                        }
+                    },
+                    responsavel: true,
+                    items: {
+                        include: {
+                            tamanho: true
+                        }
+                    }
+                }
+            });
         });
 
         return conferenciaAtualizada;
@@ -228,6 +275,30 @@ class GetRelatorioProdutividadeService {
             }
         });
 
+        // Calcular período baseado nas datas reais
+        let periodoInicio = "início";
+        let periodoFim = "hoje";
+
+        if (conferencias.length > 0) {
+            const dataSaidas = conferencias
+                .map(c => c.direcionamento.dataSaida)
+                .filter((d): d is Date => d !== null);
+
+            if (dataSaidas.length > 0) {
+                const menorDataSaida = new Date(Math.min(...dataSaidas.map(d => d.getTime())));
+                periodoInicio = menorDataSaida.toISOString().split("T")[0] ?? "início";
+            }
+
+            const datasConferencia = conferencias
+                .map(c => c.dataConferencia)
+                .filter((d): d is Date => d !== null);
+
+            if (datasConferencia.length > 0) {
+                const maiorDataConferencia = new Date(Math.max(...datasConferencia.map(d => d.getTime())));
+                periodoFim = maiorDataConferencia.toISOString().split("T")[0] || "hoje";
+            }
+        }
+
         const totalConferencias = conferencias.length;
         const conformes = conferencias.filter(c => c.statusQualidade === "conforme").length;
         const naoConformes = conferencias.filter(c => c.statusQualidade === "nao_conforme").length;
@@ -252,8 +323,8 @@ class GetRelatorioProdutividadeService {
 
         return {
             periodo: {
-                inicio: dataInicio || "início",
-                fim: dataFim || "hoje"
+                inicio: periodoInicio,
+                fim: periodoFim
             },
             totalConferencias,
             conformes,

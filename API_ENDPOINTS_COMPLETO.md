@@ -768,6 +768,7 @@ Content-Type: application/json
   "responsavelId": "uuid-usuario",
   "dataConferencia": "2026-02-10",
   "statusQualidade": "conforme",
+  "liberadoPagamento": true,
   "observacao": "Tudo em ordem",
   "items": [
     {
@@ -789,6 +790,8 @@ Content-Type: application/json
 - `nao_conforme`: Não atende aos padrões
 - `com_defeito`: Apresenta defeitos
 
+**Regra:** Só é possível liberar pagamento (`liberadoPagamento: true`) se `statusQualidade` for `conforme`.
+
 ### GET /conferencias - Listar Conferências
 ```http
 GET /conferencias?statusQualidade=conforme&liberadoPagamento=true
@@ -804,12 +807,22 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
+  "direcionamentoId": "uuid-direcionamento",
+  "responsavelId": "uuid-usuario",
   "dataConferencia": "2026-02-10",
   "statusQualidade": "com_defeito",
   "liberadoPagamento": false,
-  "observacao": "Encontrado defeitos na costura"
+  "observacao": "Encontrado defeitos na costura",
+  "items": [
+    {
+      "tamanhoId": "uuid-tamanho-P",
+      "qtdRecebida": 50,
+      "qtdDefeito": 0
+    }
+  ]
 }
 ```
+Obs: Todos os campos são opcionais.
 
 **Regra de Negócio:**
 - Não é possível liberar pagamento para conferências não conforme

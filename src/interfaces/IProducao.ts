@@ -82,15 +82,19 @@ export interface ICreateConferenciaRequest {
     responsavelId: string;
     dataConferencia?: string;
     statusQualidade?: string;
+    liberadoPagamento?: boolean;
     observacao?: string;
     items?: IConferenciaItemInput[];
 }
 
 export interface IUpdateConferenciaRequest {
+    direcionamentoId?: string;
+    responsavelId?: string;
     dataConferencia?: string;
     statusQualidade?: string;
     liberadoPagamento?: boolean;
     observacao?: string;
+    items?: IConferenciaItemInput[];
 }
 
 export interface IConferenciaResponse {

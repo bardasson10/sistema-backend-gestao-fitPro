@@ -40,12 +40,15 @@ class ListByIdConferenciaController {
 class UpdateConferenciaController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string 
-        const { dataConferencia, statusQualidade, liberadoPagamento, observacao } = req.body;
+        const { direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items } = req.body;
         const conferencia = await new UpdateConferenciaService().execute(id, {
+            direcionamentoId,
+            responsavelId,
             dataConferencia,
             statusQualidade,
             liberadoPagamento,
-            observacao
+            observacao,
+            items
         });
         return res.json(conferencia);
     }

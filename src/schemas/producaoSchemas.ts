@@ -96,6 +96,7 @@ export const createConferenciaSchema = z.object({
         responsavelId: z.uuid("ID de responsável inválido"),
         dataConferencia: z.coerce.date().optional(),
         statusQualidade: z.enum(["conforme", "nao_conforme", "com_defeito"]).optional(),
+        liberadoPagamento: z.boolean().optional(),
         observacao: z.string().optional(),
         items: z.array(z.object({
             tamanhoId: z.uuid("ID de tamanho inválido"),
@@ -107,10 +108,17 @@ export const createConferenciaSchema = z.object({
 
 export const updateConferenciaSchema = z.object({
     body: z.object({
+        direcionamentoId: z.uuid("ID de direcionamento inválido").optional(),
+        responsavelId: z.uuid("ID de responsável inválido").optional(),
         dataConferencia: z.coerce.date().optional(),
         statusQualidade: z.enum(["conforme", "nao_conforme", "com_defeito"]).optional(),
         liberadoPagamento: z.boolean().optional(),
         observacao: z.string().optional(),
+        items: z.array(z.object({
+            tamanhoId: z.uuid("ID de tamanho inválido"),
+            qtdRecebida: z.number().int().positive("Quantidade deve ser positiva"),
+            qtdDefeito: z.number().int().nonnegative("Defeitos não podem ser negativos").optional(),
+        })).optional(),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),

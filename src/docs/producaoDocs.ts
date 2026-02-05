@@ -456,7 +456,7 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
             body: {
                 content: {
                     'application/json': {
-                        schema: updateConferenciaSchema.shape.body
+                        schema: updateConferenciaSchema.shape.body,
                     }
                 }
             },
@@ -497,28 +497,12 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         }
     });
 
-  ['get', 'put', 'delete'].forEach(method => {
     registry.registerPath({
-      method: method as any,
-      path: '/conferencias/{id}',
-      tags: ['Produção'],
-      summary: method === 'get' ? 'Buscar conferência por ID' : method === 'put' ? 'Atualizar conferência' : 'Deletar conferência (admin)',
-      security: [{ bearerAuth: [] }],
-      request: {
-        params: z.object({
-          id: z.uuid()
-        })
-      },
-      responses: { 200: { description: method === 'get' ? 'Conferência encontrada' : method === 'put' ? 'Conferência atualizada' : 'Conferência removida' } }
+        method: 'get',
+        path: '/conferencias/relatorio/produtividade',
+        tags: ['Produção'],
+        summary: 'Relatório de produtividade de conferências',
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Relatório de produtividade' } }
     });
-  });
-
-  registry.registerPath({
-    method: 'get',
-    path: '/conferencias/relatorio/produtividade',
-    tags: ['Produção'],
-    summary: 'Relatório de produtividade de conferências',
-    security: [{ bearerAuth: [] }],
-    responses: { 200: { description: 'Relatório de produtividade' } }
-  });
 }
