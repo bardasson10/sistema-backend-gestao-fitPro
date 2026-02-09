@@ -25,13 +25,13 @@ class CreateTecidoService {
         // Verificar se já existe tecido com este nome para o mesmo fornecedor
         const tecidoAlreadyExists = await prismaClient.tecido.findFirst({
             where: {
-                nome,
+                codigoReferencia,
                 fornecedorId
             }
         });
 
         if (tecidoAlreadyExists) {
-            throw new Error("Tecido com este nome já existe para este fornecedor.");
+            throw new Error("Tecido com este código de referência do tecido já existe para este fornecedor.");
         }
 
         const tecido = await prismaClient.tecido.create({

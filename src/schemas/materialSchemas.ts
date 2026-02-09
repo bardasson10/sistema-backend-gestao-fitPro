@@ -3,7 +3,7 @@ import { z } from "zod";
 export const createFornecedorSchema = z.object({
     body: z.object({
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-        tipo: z.string().optional(),
+        tipo: z.enum(['tecido', 'aviamento', 'servico', '']),
         contato: z.string().optional(),
     }),
 });
@@ -11,7 +11,7 @@ export const createFornecedorSchema = z.object({
 export const updateFornecedorSchema = z.object({
     body: z.object({
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
-        tipo: z.string().optional(),
+        tipo: z.enum(['tecido', 'aviamento', 'servico', '']).optional(),
         contato: z.string().optional(),
     }),
     params: z.object({

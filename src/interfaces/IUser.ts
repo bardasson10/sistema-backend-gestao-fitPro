@@ -19,6 +19,15 @@ export interface ICreateUserResponse {
     createdAt: Date;
 }
 
+export interface IUpdateUserRequest {
+    nome?: string;
+    email?: string;
+    senha?: string;
+    perfil?: Perfil;
+    status?: string;
+    funcaoSetor?: string;
+}
+
 export interface IUserResponse {
     id: string;
     nome: string;

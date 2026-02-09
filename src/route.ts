@@ -8,7 +8,8 @@ import { CreateUserController } from "./controllers/user/CreateUserController";
 import { AuthenticateUserController } from "./controllers/user/AuthUserController";
 import { ListAllUserController } from "./controllers/user/ListAllUserController";
 import { ListByIdUserController } from "./controllers/user/ListByIdUserController";
-import { authenticateUserSchema, createUserSchema } from "./schemas/userSchemas";
+import { UpdateUserController } from "./controllers/user/UpdateUserController";
+import { authenticateUserSchema, createUserSchema, updateUserSchema } from "./schemas/userSchemas";
 
 // Produto Controllers
 import { CreateTipoProdutoController, ListAllTipoProdutoController, ListByIdTipoProdutoController, UpdateTipoProdutoController, DeleteTipoProdutoController } from "./controllers/produto/TipoProdutoController";
@@ -44,6 +45,7 @@ router.post("/session", validateSchema(authenticateUserSchema), new Authenticate
 router.get("/users/all", isAuthenticated, new ListAllUserController().handle);
 router.get("/user/me", isAuthenticated, new ListByIdUserController().handle);
 router.get("/user/:id", isAuthenticated, isAdmin, new ListByIdUserController().handle);
+router.put("/user/:id", isAuthenticated, isAdmin,validateSchema(updateUserSchema), new UpdateUserController().handle);
 
 // ==================== TIPOS DE PRODUTO ====================
 router.post("/tipos-produto", isAuthenticated, validateSchema(createTipoProdutoSchema), new CreateTipoProdutoController().handle);
