@@ -140,10 +140,14 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
     // POST /movimentacoes-estoque - Criar movimentação de estoque
     registry.registerPath({
         method: 'post',
-        path: '/movimentacoes-estoque',
+        path: '/movimentacoes-estoque/{usuarioId}',
         tags: ['Estoque'],
         summary: 'Criar movimentação de estoque',
         request: {
+            params: z.object({
+                usuarioId: z.uuid()
+            }),
+
             body: {
                 content: {
                     'application/json': {

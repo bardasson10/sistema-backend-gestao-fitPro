@@ -4,7 +4,7 @@ import { CreateMovimentacaoEstoqueService, ListAllMovimentacaoEstoqueService, Li
 class CreateMovimentacaoEstoqueController {
     async handle(req: Request, res: Response) {
         const { estoqueRoloId, tipoMovimentacao, pesoMovimentado } = req.body;
-        const usuarioId = req.userId;
+        const usuarioId = req.params.usuarioId as string | undefined;
 
         const movimentacao = await new CreateMovimentacaoEstoqueService().execute(usuarioId!, {
             estoqueRoloId,
