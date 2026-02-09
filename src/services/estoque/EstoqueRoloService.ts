@@ -145,13 +145,13 @@ class UpdateEstoqueRoloService {
             throw new Error("Rolo não encontrado.");
         }
 
-        // Validar peso se for atualizar
-        if (
-            pesoAtualKg !== undefined &&
-            pesoAtualKg > Number(rolo.pesoInicialKg)
-        ) {
-            throw new Error("Peso atual não pode ser maior que o peso inicial.");
-        }
+        // // Validar peso se for atualizar
+        // if (
+        //     pesoAtualKg !== undefined &&
+        //     pesoAtualKg > Number(rolo.pesoInicialKg)
+        // ) {
+        //     throw new Error("Peso atual não pode ser maior que o peso inicial.");
+        // }
 
         const roloAtualizado = await prismaClient.estoqueRolo.update({
             where: { id },
