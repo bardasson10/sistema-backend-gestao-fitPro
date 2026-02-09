@@ -6,6 +6,7 @@ import { isAdmin } from "./middlewares/IsAdmin";
 // User Controllers
 import { CreateUserController } from "./controllers/user/CreateUserController";
 import { AuthenticateUserController } from "./controllers/user/AuthUserController";
+import { LogoutUserController } from "./controllers/user/LogoutUserController";
 import { ListAllUserController } from "./controllers/user/ListAllUserController";
 import { ListByIdUserController } from "./controllers/user/ListByIdUserController";
 import { UpdateUserController } from "./controllers/user/UpdateUserController";
@@ -42,6 +43,7 @@ const router = Router();
 // ==================== USUÁRIOS ====================
 router.post("/users", validateSchema(createUserSchema), new CreateUserController().handle);
 router.post("/session", validateSchema(authenticateUserSchema), new AuthenticateUserController().handle);
+router.post("/logout", isAuthenticated, new LogoutUserController().handle);
 router.get("/users/all", isAuthenticated, new ListAllUserController().handle);
 router.get("/user/me", isAuthenticated, new ListByIdUserController().handle);
 router.get("/user/:id", isAuthenticated, isAdmin, new ListByIdUserController().handle);

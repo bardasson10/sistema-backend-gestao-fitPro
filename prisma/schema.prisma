@@ -37,8 +37,27 @@ model Usuario {
   movimentacoes  MovimentacaoEstoque[]
   lotesResponsa  LoteProducao[]
   conferencias   Conferencia[]
+  sessoes        Sessao[]
 
   @@map("usuario")
+}
+
+// --- CONTROLE DE SESSÕES ---
+
+model Sessao {
+  id          String   @id @default(uuid())
+  usuarioId   String   @map("usuario_id")
+  token       String   @unique
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  expiresAt   DateTime @map("expires_at")
+  
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([token])
+  @@index([ativo])
+  @@map("sessao")
 }
 
 // --- CADASTROS BASE DE PRODUTOS ---

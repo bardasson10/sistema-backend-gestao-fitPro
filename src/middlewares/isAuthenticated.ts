@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import prismaClient from '../prisma';
 
 interface Payload {
     sub: string;
 }
 
-export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
+export async function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 
     const authToken= req.headers.authorization;
     
@@ -21,6 +22,24 @@ export function isAuthenticated(req: Request, res: Response, next: NextFunction)
 
         const { sub } = jwt.verify(token!, process.env.JWT_SECRET as string) as Payload;
         
+        // Verificar se a sessão está ativa no banco
+        const sessao = await prismaClient.sessao.findFirst({
+            where: {
+                token: token,
+                usuarioId: sub,
+                ativo: true,
+                expiresAt: {
+                    gte: new Date()
+                }
+            }
+        });
+
+        if (!sessao) {
+            return res.status(401).json({
+                error: 'Sessão inválida ou expirada. Faça login novamente.'
+            });
+        }
+
         req.userId = sub;
 
 

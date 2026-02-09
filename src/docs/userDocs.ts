@@ -52,6 +52,7 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
         path: '/session',
         tags: ['Autenticação'],
         summary: 'Autenticar usuário',
+        description: 'Realiza login do usuário. Apenas uma sessão pode estar ativa por conta. Ao fazer novo login, a sessão anterior será automaticamente invalidada.',
         request: {
             body: {
                 content: {
@@ -86,6 +87,34 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
             },
             401: {
                 description: 'Credenciais inválidas'
+            }
+        }
+    });
+
+    // POST /logout - Logout
+    registry.registerPath({
+        method: 'post',
+        path: '/logout',
+        tags: ['Autenticação'],
+        summary: 'Realizar logout',
+        description: 'Invalida a sessão atual do usuário autenticado.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+            200: {
+                description: 'Logout realizado com sucesso',
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                message: { type: 'string', example: 'Logout realizado com sucesso.' }
+                            }
+                        }
+                    }
+                }
+            },
+            401: {
+                description: 'Token não fornecido ou inválido'
             }
         }
     });
