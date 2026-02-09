@@ -50,6 +50,10 @@ export const updateLoteProducaoSchema = z.object({
             tamanhoId: z.uuid("ID de tamanho inválido"),
             quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
         })).optional(),
+        rolosProducao: z.array(z.object({
+            estoqueRoloId: z.uuid("ID de rolo inválido"),
+            pesoUtilizado: z.number().positive("Peso utilizado deve ser positivo"),
+        })).optional(),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),

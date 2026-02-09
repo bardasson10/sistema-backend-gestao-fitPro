@@ -5,6 +5,7 @@ export interface ICreateEstoqueRoloRequest {
     pesoInicialKg: number;
     pesoAtualKg: number;
     situacao?: string;
+    usuarioId: string; // ID do usuário que está criando o rolo (para movimentação automática)
 }
 
 export interface IUpdateEstoqueRoloRequest {

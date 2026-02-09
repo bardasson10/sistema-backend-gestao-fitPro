@@ -3,52 +3,64 @@ import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } fro
 import prismaClient from "../../prisma";
 
 class CreateEstoqueRoloService {
-    async execute({ tecidoId, codigoBarraRolo, pesoInicialKg, pesoAtualKg, situacao }: ICreateEstoqueRoloRequest) {
-        // Verificar se tecido existe
-        const tecido = await prismaClient.tecido.findUnique({
-            where: { id: tecidoId }
-        });
-
-        if (!tecido) {
-            throw new Error("Tecido não encontrado.");
-        }
-
-        // Verificar se código de barra é único (se fornecido)
-        if (codigoBarraRolo) {
-            const roloComCodigo = await prismaClient.estoqueRolo.findUnique({
-                where: { codigoBarraRolo }
+    async execute({ tecidoId, codigoBarraRolo, pesoInicialKg, pesoAtualKg, situacao, usuarioId }: ICreateEstoqueRoloRequest) {
+        return prismaClient.$transaction(async (tx) => {
+            // Verificar se tecido existe
+            const tecido = await tx.tecido.findUnique({
+                where: { id: tecidoId }
             });
 
-            if (roloComCodigo) {
-                throw new Error("Já existe um rolo com este código de barra.");
+            if (!tecido) {
+                throw new Error("Tecido não encontrado.");
             }
-        }
 
-        // Validar pesos
-        if (pesoAtualKg > pesoInicialKg) {
-            throw new Error("Peso atual não pode ser maior que o peso inicial.");
-        }
+            // Verificar se código de barra é único (se fornecido)
+            if (codigoBarraRolo) {
+                const roloComCodigo = await tx.estoqueRolo.findUnique({
+                    where: { codigoBarraRolo }
+                });
 
-        const rolo = await prismaClient.estoqueRolo.create({
-            data: {
-                tecidoId,
-                codigoBarraRolo,
-                pesoInicialKg,
-                pesoAtualKg,
-                situacao: situacao || "disponivel"
-            },
-            include: {
-                tecido: {
-                    include: {
-                        fornecedor: true,
-                        cor: true
-                    }
+                if (roloComCodigo) {
+                    throw new Error("Já existe um rolo com este código de barra.");
+                }
+            }
+
+            // Validar pesos
+            if (pesoAtualKg > pesoInicialKg) {
+                throw new Error("Peso atual não pode ser maior que o peso inicial.");
+            }
+
+            const rolo = await tx.estoqueRolo.create({
+                data: {
+                    tecidoId,
+                    codigoBarraRolo,
+                    pesoInicialKg,
+                    pesoAtualKg,
+                    situacao: situacao || "disponivel"
                 },
-                movimentacoes: true
-            }
-        });
+                include: {
+                    tecido: {
+                        include: {
+                            fornecedor: true,
+                            cor: true
+                        }
+                    },
+                    movimentacoes: true
+                }
+            });
 
-        return rolo;
+            // Registrar movimentação automática de ENTRADA
+            await tx.movimentacaoEstoque.create({
+                data: {
+                    estoqueRoloId: rolo.id,
+                    usuarioId,
+                    tipoMovimentacao: "entrada",
+                    pesoMovimentado: pesoInicialKg
+                }
+            });
+
+            return rolo;
+        });
     }
 }
 

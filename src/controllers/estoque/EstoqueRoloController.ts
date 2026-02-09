@@ -4,12 +4,15 @@ import { CreateEstoqueRoloService, ListAllEstoqueRoloService, ListByIdEstoqueRol
 class CreateEstoqueRoloController {
     async handle(req: Request, res: Response) {
         const { tecidoId, codigoBarraRolo, pesoInicialKg, pesoAtualKg, situacao } = req.body;
+        const usuarioId = req.userId; // Pega o ID do usuário autenticado
+        
         const rolo = await new CreateEstoqueRoloService().execute({
             tecidoId,
             codigoBarraRolo,
             pesoInicialKg,
             pesoAtualKg,
-            situacao
+            situacao,
+            usuarioId
         });
         return res.status(201).json(rolo);
     }

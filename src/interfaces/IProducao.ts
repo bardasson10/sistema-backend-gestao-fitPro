@@ -38,6 +38,8 @@ export interface IUpdateLoteProducaoRequest {
     status?: string;
     observacao?: string;
     items?: ILoteItemInput[];
+    rolosProducao?: Array<{ estoqueRoloId: string; pesoUtilizado: number }>; // Rolos usados ao iniciar produção (movimentação automática)
+    usuarioId?: string; // ID do usuário para movimentação automática
 }
 
 export interface IAddLoteItemsRequest {
