@@ -22,13 +22,19 @@ export interface ILoteItemInput {
     quantidadePlanejada: number;
 }
 
+export interface ILoteRoloInput {
+    estoqueRoloId: string;
+    pesoReservado: number;
+}
+
 export interface ICreateLoteProducaoRequest {
     codigoLote: string;
-    tecidoId: string;
+    tecidoId?: string;
     responsavelId: string;
     status?: string;
     observacao?: string;
     items?: ILoteItemInput[];
+    rolos?: ILoteRoloInput[];
 }
 
 export interface IUpdateLoteProducaoRequest {

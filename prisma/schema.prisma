@@ -172,6 +172,7 @@ model EstoqueRolo {
 
   tecido            Tecido   @relation(fields: [tecidoId], references: [id])
   movimentacoes     MovimentacaoEstoque[]
+  lotes             LoteRolo[]
 
   @@index([tecidoId])
   @@index([situacao])
@@ -228,10 +229,26 @@ model LoteProducao {
   responsavel    Usuario  @relation(fields: [responsavelId], references: [id])
   
   items          LoteItem[]
+  rolos          LoteRolo[]
   direcionamentos Direcionamento[]
 
   @@index([status])
   @@map("lote_producao")
+}
+
+model LoteRolo {
+  id                String   @id @default(uuid())
+  loteProducaoId    String   @map("lote_producao_id")
+  estoqueRoloId     String   @map("estoque_rolo_id")
+  pesoReservado     Decimal  @map("peso_reservado") @db.Decimal(10, 3)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  lote              LoteProducao @relation(fields: [loteProducaoId], references: [id], onDelete: Cascade)
+  rolo              EstoqueRolo  @relation(fields: [estoqueRoloId], references: [id])
+
+  @@index([loteProducaoId])
+  @@index([estoqueRoloId])
+  @@map("lote_rolo")
 }
 
 model LoteItem {

@@ -26,7 +26,7 @@ export const updateFaccaoSchema = z.object({
 export const createLoteProducaoSchema = z.object({
     body: z.object({
         codigoLote: z.string().min(1, "Código do lote é obrigatório"),
-        tecidoId: z.uuid("ID de tecido inválido"),
+        tecidoId: z.uuid("ID de tecido inválido").optional(),
         responsavelId: z.uuid("ID de responsável inválido"),
         status: z.enum(["planejado", "em_producao", "concluido", "cancelado"]).optional(),
         observacao: z.string().optional(),
@@ -35,6 +35,13 @@ export const createLoteProducaoSchema = z.object({
             tamanhoId: z.uuid("ID de tamanho inválido"),
             quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
         })).optional(),
+        rolos: z.array(z.object({
+            estoqueRoloId: z.uuid("ID de rolo inválido"),
+            pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
+        })).optional(),
+    }).refine((data) => data.tecidoId || (data.rolos && data.rolos.length > 0), {
+        message: "É necessário informar o tecidoId ou pelo menos um rolo.",
+        path: ["tecidoId"],
     }),
 });
 

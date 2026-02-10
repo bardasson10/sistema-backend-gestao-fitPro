@@ -3,7 +3,7 @@ import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } fro
 import prismaClient from "../../prisma";
 
 class CreateLoteProducaoService {
-    async execute({ codigoLote, tecidoId, responsavelId, status, observacao, items }: ICreateLoteProducaoRequest) {
+    async execute({ codigoLote, tecidoId, responsavelId, status, observacao, items, rolos }: ICreateLoteProducaoRequest) {
         // Verificar se código de lote já existe
         const loteAlreadyExists = await prismaClient.loteProducao.findUnique({
             where: { codigoLote }
@@ -13,9 +13,64 @@ class CreateLoteProducaoService {
             throw new Error("Lote com este código já existe.");
         }
 
-        // Verificar se tecido existe
+        let tecidoIdFinal = tecidoId;
+
+        // Validar e inferir tecidoId pelos rolos se fornecidos
+        if (rolos && rolos.length > 0) {
+            const roloIds = [...new Set(rolos.map(rolo => rolo.estoqueRoloId))];
+
+            const rolosExistentes = await prismaClient.estoqueRolo.findMany({
+                where: { id: { in: roloIds } }
+            });
+
+            if (rolosExistentes.length !== roloIds.length) {
+                throw new Error("Um ou mais rolos não encontrados.");
+            }
+
+            if (rolosExistentes.length === 0) {
+                throw new Error("Nenhum rolo encontrado.");
+            }
+
+            // Inferir tecidoId do primeiro rolo
+            const primeiroRolo = rolosExistentes[0];
+            if (!primeiroRolo) {
+                throw new Error("Erro ao processar rolos.");
+            }
+            const tecidoIdRolos = primeiroRolo.tecidoId;
+
+            // Verificar se todos os rolos são do mesmo tecido
+            for (const roloExistente of rolosExistentes) {
+                if (roloExistente.tecidoId !== tecidoIdRolos) {
+                    throw new Error("Todos os rolos devem pertencer ao mesmo tecido.");
+                }
+            }
+
+            // Se tecidoId foi fornecido, verificar se bate com o tecido dos rolos
+            if (tecidoId && tecidoId !== tecidoIdRolos) {
+                throw new Error("O tecidoId fornecido não corresponde ao tecido dos rolos.");
+            }
+
+            // Atualizar tecidoIdFinal
+            tecidoIdFinal = tecidoIdRolos;
+
+            // Verificar se todos os rolos têm peso suficiente
+            for (const rolo of rolos) {
+                const roloExistente = rolosExistentes.find(r => r.id === rolo.estoqueRoloId);
+                // Validar peso somente se rolo existir (já validado acima, mas por segurança de tipagem)
+                if (roloExistente && Number(roloExistente.pesoAtualKg) < rolo.pesoReservado) {
+                    throw new Error(`Rolo ${roloExistente.id} não tem peso suficiente. Disponível: ${roloExistente.pesoAtualKg}kg, Solicitado: ${rolo.pesoReservado}kg`);
+                }
+            }
+        }
+
+        // Se tecidoIdFinal ainda não estiver definido, erro
+        if (!tecidoIdFinal) {
+            throw new Error("É necessário informar o tecidoId ou fornecer rolos para identificar o tecido.");
+        }
+
+        // Verificar se tecido existe (redundante se veio dos rolos, mas bom para garantir integridade e retornos padronizados se veio via ID apenas)
         const tecido = await prismaClient.tecido.findUnique({
-            where: { id: tecidoId }
+            where: { id: tecidoIdFinal }
         });
 
         if (!tecido) {
@@ -54,11 +109,11 @@ class CreateLoteProducaoService {
             }
         }
 
-        // Criar lote com items
+        // Criar lote com items e rolos
         const lote = await prismaClient.loteProducao.create({
             data: {
                 codigoLote,
-                tecidoId,
+                tecidoId: tecidoIdFinal,
                 responsavelId,
                 status: status || "planejado",
                 observacao,
@@ -68,11 +123,31 @@ class CreateLoteProducaoService {
                         tamanhoId: item.tamanhoId,
                         quantidadePlanejada: item.quantidadePlanejada
                     }))
+                } : undefined,
+                rolos: rolos ? {
+                    create: rolos.map(rolo => ({
+                        estoqueRoloId: rolo.estoqueRoloId,
+                        pesoReservado: rolo.pesoReservado
+                    }))
                 } : undefined
             },
             include: {
-                tecido: true,
-                responsavel: true,
+                tecido: {
+                    include: {
+                        fornecedor: true,
+                        cor: true,
+                        rolos: true
+                    }
+                },
+                responsavel: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        perfil: true,
+                        status: true,
+                        funcaoSetor: true
+                    }
+                },
                 items: {
                     include: {
                         tamanho: true,
@@ -87,6 +162,7 @@ class CreateLoteProducaoService {
     }
 }
 
+
 class ListAllLoteProducaoService {
     async execute(status?: string, responsavelId?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
@@ -98,12 +174,30 @@ class ListAllLoteProducaoService {
                     ...(responsavelId && { responsavelId })
                 },
                 include: {
-                    tecido: true,
-                    responsavel: true,
+                    tecido: {
+                        include: {
+                            fornecedor: true,
+                            cor: true
+                        }
+                    },
+                    responsavel: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            perfil: true,
+                            status: true,
+                            funcaoSetor: true
+                        }
+                    },
                     items: {
                         include: {
                             produto: true,
                             tamanho: true
+                        }
+                    },
+                    rolos: {
+                        include: {
+                            rolo: true
                         }
                     },
                     direcionamentos: true
@@ -122,7 +216,29 @@ class ListAllLoteProducaoService {
             })
         ]);
 
-        return createPaginatedResponse(lotes, total, pageNumber, pageLimit);
+        const lotesFormatted = lotes.map(lote => {
+            const rolosList = lote.rolos.map(lr => ({
+                ...lr.rolo,
+                pesoReservado: Number(lr.pesoReservado)
+            }));
+            const pesoTotal = rolosList.reduce((acc, rolo) => acc + rolo.pesoReservado, 0);
+            
+            // Remover propriedade 'rolos' da raiz para não duplicar, já que estamos movendo para dentro de tecido
+            const { rolos, ...loteSemRolos } = lote;
+
+            return {
+                ...loteSemRolos,
+                tecido: {
+                    ...lote.tecido,
+                    rolos: {
+                        itens: rolosList
+                    },
+                    pesoTotal
+                }
+            };
+        });
+
+        return createPaginatedResponse(lotesFormatted, total, pageNumber, pageLimit);
     }
 }
 
@@ -131,12 +247,30 @@ class ListByIdLoteProducaoService {
         const lote = await prismaClient.loteProducao.findUnique({
             where: { id },
             include: {
-                tecido: true,
-                responsavel: true,
+                tecido: {
+                    include: {
+                        fornecedor: true,
+                        cor: true
+                    }
+                },
+                responsavel: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        perfil: true,
+                        status: true,
+                        funcaoSetor: true
+                    }
+                },
                 items: {
                     include: {
                         produto: true,
                         tamanho: true
+                    }
+                },
+                rolos: {
+                    include: {
+                        rolo: true
                     }
                 },
                 direcionamentos: {
@@ -152,7 +286,25 @@ class ListByIdLoteProducaoService {
             throw new Error("Lote não encontrado.");
         }
 
-        return lote;
+        const rolosList = lote.rolos.map(lr => ({
+            ...lr.rolo,
+            pesoReservado: Number(lr.pesoReservado)
+        }));
+        const pesoTotal = rolosList.reduce((acc, rolo) => acc + rolo.pesoReservado, 0);
+        
+        // Remover propriedade 'rolos' da raiz
+        const { rolos, ...loteSemRolos } = lote;
+
+        return {
+            ...loteSemRolos,
+            tecido: {
+                ...lote.tecido,
+                rolos: {
+                    itens: rolosList
+                },
+                pesoTotal
+            }
+        };
     }
 }
 
@@ -302,8 +454,22 @@ class UpdateLoteProducaoService {
                     observacao
                 },
                 include: {
-                    tecido: true,
-                    responsavel: true,
+                    tecido: {
+                        include: {
+                            fornecedor: true,
+                            cor: true,
+                            rolos: true
+                        }
+                    },
+                    responsavel: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            perfil: true,
+                            status: true,
+                            funcaoSetor: true
+                        }
+                    },
                     items: {
                         include: {
                             produto: true,
@@ -369,8 +535,22 @@ class AddLoteItemsService {
             return tx.loteProducao.findUnique({
                 where: { id },
                 include: {
-                    tecido: true,
-                    responsavel: true,
+                    tecido: {
+                        include: {
+                            fornecedor: true,
+                            cor: true,
+                            rolos: true
+                        }
+                    },
+                    responsavel: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            perfil: true,
+                            status: true,
+                            funcaoSetor: true
+                        }
+                    },
                     items: {
                         include: {
                             produto: true,
@@ -392,6 +572,7 @@ class DeleteLoteProducaoService {
             where: { id },
             include: {
                 items: true,
+                rolos: true,
                 direcionamentos: true
             }
         });
@@ -404,7 +585,12 @@ class DeleteLoteProducaoService {
             throw new Error("Não é possível deletar um lote que possui direcionamentos associados.");
         }
 
-        // Deletar items primeiro
+        // Deletar rolos primeiro (via cascade, mas explícito)
+        await prismaClient.loteRolo.deleteMany({
+            where: { loteProducaoId: id }
+        });
+
+        // Deletar items
         await prismaClient.loteItem.deleteMany({
             where: { loteProducaoId: id }
         });
