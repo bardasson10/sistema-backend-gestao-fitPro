@@ -4,7 +4,7 @@ import { CreateMovimentacaoEstoqueService, ListAllMovimentacaoEstoqueService, Li
 class CreateMovimentacaoEstoqueController {
     async handle(req: Request, res: Response) {
         const { estoqueRoloId, tipoMovimentacao, pesoMovimentado } = req.body;
-        const usuarioId = req.params.usuarioId as string | undefined;
+        const usuarioId = req.userId || req.params.usuarioId as string | undefined; // Pega o ID do usuário autenticado (pode vir como parâmetro ou do token)
 
         const movimentacao = await new CreateMovimentacaoEstoqueService().execute(usuarioId!, {
             estoqueRoloId,

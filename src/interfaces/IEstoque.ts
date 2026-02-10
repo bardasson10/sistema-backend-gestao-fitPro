@@ -11,6 +11,7 @@ export interface ICreateEstoqueRoloRequest {
 export interface IUpdateEstoqueRoloRequest {
     pesoAtualKg?: number;
     situacao?: string;
+    usuarioId?: string;
 }
 
 export interface IEstoqueRoloResponse {

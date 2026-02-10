@@ -37,15 +37,6 @@ class CreateEstoqueRoloService {
                     pesoInicialKg,
                     pesoAtualKg,
                     situacao: situacao || "disponivel"
-                },
-                include: {
-                    tecido: {
-                        include: {
-                            fornecedor: true,
-                            cor: true
-                        }
-                    },
-                    movimentacoes: true
                 }
             });
 
@@ -59,7 +50,35 @@ class CreateEstoqueRoloService {
                 }
             });
 
-            return rolo;
+            // Re-buscar o rolo com todas as relações
+            const roloCompleto = await tx.estoqueRolo.findUnique({
+                where: { id: rolo.id },
+                include: {
+                    tecido: {
+                        include: {
+                            fornecedor: true,
+                            cor: true
+                        }
+                    },
+                    movimentacoes: {
+                        include: {
+                            usuario: {
+                                select: {
+                                    id: true,
+                                    nome: true,
+                                    funcaoSetor: true,
+                                    perfil: true
+                                }
+                            }
+                        },
+                        orderBy: {
+                            createdAt: "desc"
+                        }
+                    }
+                }
+            });
+
+            return roloCompleto;
         });
     }
 }
@@ -81,7 +100,21 @@ class ListAllEstoqueRoloService {
                             cor: true
                         }
                     },
-                    movimentacoes: true
+                    movimentacoes: {
+                        include: {
+                            usuario: {
+                                select: {
+                                    id: true,
+                                    nome: true,
+                                    funcaoSetor: true,
+                                    perfil: true
+                                }
+                            }
+                        },
+                        orderBy: {
+                            createdAt: "desc"
+                        }
+                    }
                 },
                 skip,
                 take: pageLimit,
@@ -136,41 +169,87 @@ class ListByIdEstoqueRoloService {
 }
 
 class UpdateEstoqueRoloService {
-    async execute(id: string, { pesoAtualKg, situacao }: IUpdateEstoqueRoloRequest) {
-        const rolo = await prismaClient.estoqueRolo.findUnique({
-            where: { id }
-        });
+    async execute(id: string, { pesoAtualKg, situacao, usuarioId }: IUpdateEstoqueRoloRequest) {
+        return prismaClient.$transaction(async (tx) => {
+            const rolo = await tx.estoqueRolo.findUnique({
+                where: { id }
+            });
 
-        if (!rolo) {
-            throw new Error("Rolo não encontrado.");
-        }
-
-        // // Validar peso se for atualizar
-        // if (
-        //     pesoAtualKg !== undefined &&
-        //     pesoAtualKg > Number(rolo.pesoInicialKg)
-        // ) {
-        //     throw new Error("Peso atual não pode ser maior que o peso inicial.");
-        // }
-
-        const roloAtualizado = await prismaClient.estoqueRolo.update({
-            where: { id },
-            data: {
-                pesoAtualKg,
-                situacao
-            },
-            include: {
-                tecido: {
-                    include: {
-                        fornecedor: true,
-                        cor: true
-                    }
-                },
-                movimentacoes: true
+            if (!rolo) {
+                throw new Error("Rolo não encontrado.");
             }
-        });
 
-        return roloAtualizado;
+            const pesoAtualBanco = rolo.pesoAtualKg.toNumber();
+
+            if (pesoAtualKg !== undefined) {
+                // if (pesoAtualKg > rolo.pesoInicialKg.toNumber()) {
+                //     throw new Error("Peso atual não pode ser maior que o peso inicial.");
+                // }
+
+                if (pesoAtualKg < 0) {
+                    throw new Error("Peso atual não pode ser negativo.");
+                }
+            }
+
+            // Atualizar o rolo
+            await tx.estoqueRolo.update({
+                where: { id },
+                data: {
+                    pesoAtualKg,
+                    situacao
+                }
+            });
+
+            // Registrar movimentação automática se houver alteração de peso
+            if (pesoAtualKg !== undefined) {
+                const diferenca = Number((pesoAtualKg - pesoAtualBanco).toFixed(3));
+
+                if (diferenca !== 0) {
+                    if (!usuarioId) {
+                        throw new Error("usuarioId é obrigatório para registrar movimentação.");
+                    }
+
+                    await tx.movimentacaoEstoque.create({
+                        data: {
+                            estoqueRoloId: rolo.id,
+                            usuarioId,
+                            tipoMovimentacao: diferenca > 0 ? "entrada" : "saida",
+                            pesoMovimentado: Math.abs(diferenca)
+                        }
+                    });
+                }
+            }
+
+            // Re-buscar o rolo com todas as movimentações atualizadas
+            const roloAtualizado = await tx.estoqueRolo.findUnique({
+                where: { id },
+                include: {
+                    tecido: {
+                        include: {
+                            fornecedor: true,
+                            cor: true
+                        }
+                    },
+                    movimentacoes: {
+                        include: {
+                            usuario: {
+                                select: {
+                                    id: true,
+                                    nome: true,
+                                    funcaoSetor: true,
+                                    perfil: true
+                                }
+                            }
+                        },
+                        orderBy: {
+                            createdAt: "desc"
+                        }
+                    }
+                }
+            });
+
+            return roloAtualizado;
+        });
     }
 }
 
