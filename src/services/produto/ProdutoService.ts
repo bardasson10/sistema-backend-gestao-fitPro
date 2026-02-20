@@ -32,8 +32,15 @@ class CreateProdutoService {
                 precoMedioVenda
             },
             include: {
-                tipo: true,
-                loteItems: true
+                tipo: {
+                    include: {
+                        tamanhos: {
+                            include: {
+                                tamanho: true
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -49,8 +56,15 @@ class ListAllProdutoService {
             prismaClient.produto.findMany({
                 where: tipoProdutoId ? { tipoProdutoId } : undefined,
                 include: {
-                    tipo: true,
-                    loteItems: true
+                    tipo: {
+                        include: {
+                            tamanhos: {
+                                include: {
+                                    tamanho: true
+                                }
+                            }
+                        }
+                    }
                 },
                 skip,
                 take: pageLimit,
@@ -72,8 +86,15 @@ class ListByIdProdutoService {
         const produto = await prismaClient.produto.findUnique({
             where: { id },
             include: {
-                tipo: true,
-                loteItems: true
+                tipo: {
+                    include: {
+                        tamanhos: {
+                            include: {
+                                tamanho: true
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -121,8 +142,15 @@ class UpdateProdutoService {
             where: { id },
             data,
             include: {
-                tipo: true,
-                loteItems: true
+                tipo: {
+                    include: {
+                        tamanhos: {
+                            include: {
+                                tamanho: true
+                            }
+                        }
+                    }
+                }
             }
         });
 
