@@ -96,53 +96,86 @@ class CreateLoteProducaoService {
             }
         }
 
-        // Criar lote com items e rolos
-        const lote = await prismaClient.loteProducao.create({
-            data: {
-                codigoLote,
-                tecidoId: tecidoIdFinal,
-                responsavelId,
-                status: status || "planejado",
-                observacao,
-                items: items ? {
-                    create: items.map(item => ({
-                        produtoId: item.produtoId,
-                        tamanhoId: item.tamanhoId,
-                        quantidadePlanejada: item.quantidadePlanejada
-                    }))
-                } : undefined,
-                rolos: rolos ? {
-                    create: rolos.map(rolo => ({
-                        estoqueRoloId: rolo.estoqueRoloId,
-                        pesoReservado: rolo.pesoReservado
-                    }))
-                } : undefined
-            },
-            include: {
-                tecido: {
-                    include: {
-                        fornecedor: true,
-                        cor: true,
-                        rolos: true
-                    }
+        // Usar transação para criar lote, atualizar rolos e registrar movimentações
+        const lote = await prismaClient.$transaction(async (tx) => {
+            // Criar lote com items e rolos
+            const novoLote = await tx.loteProducao.create({
+                data: {
+                    codigoLote,
+                    tecidoId: tecidoIdFinal,
+                    responsavelId,
+                    status: status || "planejado",
+                    observacao,
+                    items: items ? {
+                        create: items.map(item => ({
+                            produtoId: item.produtoId,
+                            tamanhoId: item.tamanhoId,
+                            quantidadePlanejada: item.quantidadePlanejada
+                        }))
+                    } : undefined,
+                    rolos: rolos ? {
+                        create: rolos.map(rolo => ({
+                            estoqueRoloId: rolo.estoqueRoloId,
+                            pesoReservado: rolo.pesoReservado
+                        }))
+                    } : undefined
                 },
-                responsavel: {
-                    select: {
-                        id: true,
-                        nome: true,
-                        perfil: true,
-                        status: true,
-                        funcaoSetor: true
-                    }
-                },
-                items: {
-                    include: {
-                        tamanho: true,
-                        produto: true
-                    }
-                },
-                direcionamentos: true
+                include: {
+                    tecido: {
+                        include: {
+                            fornecedor: true,
+                            cor: true,
+                            rolos: true
+                        }
+                    },
+                    responsavel: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            perfil: true,
+                            status: true,
+                            funcaoSetor: true
+                        }
+                    },
+                    items: {
+                        include: {
+                            tamanho: true,
+                            produto: true
+                        }
+                    },
+                    direcionamentos: true
+                }
+            });
+
+            // Diminuir peso dos rolos e registrar movimentações de estoque
+            for (const roloInfo of rolos) {
+                const roloExistente = rolosExistentes.find(r => r.id === roloInfo.estoqueRoloId);
+                
+                if (roloExistente) {
+                    // Atualizar peso do rolo
+                    const novopeso = Number(roloExistente.pesoAtualKg) - roloInfo.pesoReservado;
+                    
+                    await tx.estoqueRolo.update({
+                        where: { id: roloInfo.estoqueRoloId },
+                        data: {
+                            pesoAtualKg: novopeso,
+                            situacao: novopeso > 0 ? "disponivel" : "esgotado"
+                        }
+                    });
+
+                    // Registrar movimentação de estoque
+                    await tx.movimentacaoEstoque.create({
+                        data: {
+                            estoqueRoloId: roloInfo.estoqueRoloId,
+                            usuarioId: responsavelId,
+                            tipoMovimentacao: "saida",
+                            pesoMovimentado: roloInfo.pesoReservado
+                        }
+                    });
+                }
             }
+
+            return novoLote;
         });
 
         return lote;
