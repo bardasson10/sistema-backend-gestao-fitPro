@@ -67,8 +67,6 @@ export interface ICreateDirecionamentoRequest {
     loteProducaoId: string;
     faccaoId: string;
     tipoServico: "costura" | "estampa" | "tingimento" | "acabamento" | "corte" | "outro";
-    dataSaida?: string;
-    dataPrevisaoRetorno?: string;
 }
 
 export interface IUpdateDirecionamentoRequest {

@@ -155,14 +155,6 @@ class CreateLoteProducaoService {
                     // Atualizar peso do rolo
                     const novopeso = Number(roloExistente.pesoAtualKg) - roloInfo.pesoReservado;
                     
-                    await tx.estoqueRolo.update({
-                        where: { id: roloInfo.estoqueRoloId },
-                        data: {
-                            pesoAtualKg: novopeso,
-                            situacao: novopeso > 0 ? "disponivel" : "esgotado"
-                        }
-                    });
-
                     // Registrar movimentação de estoque
                     await tx.movimentacaoEstoque.create({
                         data: {
@@ -172,6 +164,21 @@ class CreateLoteProducaoService {
                             pesoMovimentado: roloInfo.pesoReservado
                         }
                     });
+                    
+                    // Se peso chegar a 0, deletar rolo; caso contrário, atualizar
+                    if (novopeso <= 0) {
+                        await tx.estoqueRolo.delete({
+                            where: { id: roloInfo.estoqueRoloId }
+                        });
+                    } else {
+                        await tx.estoqueRolo.update({
+                            where: { id: roloInfo.estoqueRoloId },
+                            data: {
+                                pesoAtualKg: novopeso,
+                                situacao: "disponivel"
+                            }
+                        });
+                    }
                 }
             }
 
@@ -378,14 +385,8 @@ class UpdateLoteProducaoService {
                     }
 
                     // Atualizar peso do rolo
-                    await tx.estoqueRolo.update({
-                        where: { id: roloInfo.estoqueRoloId },
-                        data: {
-                            pesoAtualKg: Number(rolo.pesoAtualKg) - roloInfo.pesoUtilizado,
-                            situacao: "em_uso"
-                        }
-                    });
-
+                    const novoPeso = Number(rolo.pesoAtualKg) - roloInfo.pesoUtilizado;
+                    
                     // Registrar movimentação de saída
                     await tx.movimentacaoEstoque.create({
                         data: {
@@ -395,6 +396,21 @@ class UpdateLoteProducaoService {
                             pesoMovimentado: roloInfo.pesoUtilizado
                         }
                     });
+                    
+                    // Se peso chegar a 0, deletar rolo; caso contrário, atualizar
+                    if (novoPeso <= 0) {
+                        await tx.estoqueRolo.delete({
+                            where: { id: roloInfo.estoqueRoloId }
+                        });
+                    } else {
+                        await tx.estoqueRolo.update({
+                            where: { id: roloInfo.estoqueRoloId },
+                            data: {
+                                pesoAtualKg: novoPeso,
+                                situacao: "em_uso"
+                            }
+                        });
+                    }
                 }
             }
 

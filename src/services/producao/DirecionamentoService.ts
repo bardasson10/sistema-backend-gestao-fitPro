@@ -3,7 +3,7 @@ import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } fro
 import prismaClient from "../../prisma";
 
 class CreateDirecionamentoService {
-    async execute({ loteProducaoId, faccaoId, tipoServico, dataSaida, dataPrevisaoRetorno }: ICreateDirecionamentoRequest) {
+    async execute({ loteProducaoId, faccaoId, tipoServico }: ICreateDirecionamentoRequest) {
         // Verificar se lote existe
         const lote = await prismaClient.loteProducao.findUnique({
             where: { id: loteProducaoId }
@@ -43,8 +43,8 @@ class CreateDirecionamentoService {
                     loteProducaoId,
                     faccaoId,
                     tipoServico,
-                    dataSaida: dataSaida ? new Date(dataSaida) : new Date(),
-                    dataPrevisaoRetorno: dataPrevisaoRetorno ? new Date(dataPrevisaoRetorno) : undefined,
+                    dataSaida: new Date(),
+                    dataPrevisaoRetorno: undefined,
                     status: "enviado"
                 },
                 include: {

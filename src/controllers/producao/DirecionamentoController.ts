@@ -3,13 +3,11 @@ import { CreateDirecionamentoService, ListAllDirecionamentoService, ListByIdDire
 
 class CreateDirecionamentoController {
     async handle(req: Request, res: Response) {
-        const { loteProducaoId, faccaoId, tipoServico, dataSaida, dataPrevisaoRetorno } = req.body;
+        const { loteProducaoId, faccaoId, tipoServico } = req.body;
         const direcionamento = await new CreateDirecionamentoService().execute({
             loteProducaoId,
             faccaoId,
-            tipoServico,
-            dataSaida,
-            dataPrevisaoRetorno
+            tipoServico
         });
         return res.status(201).json(direcionamento);
     }

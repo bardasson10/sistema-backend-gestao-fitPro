@@ -81,8 +81,6 @@ export const createDirecionamentoSchema = z.object({
         loteProducaoId: z.uuid("ID de lote inválido"),
         faccaoId: z.uuid("ID de facção inválido"),
         tipoServico: z.enum(["costura", "estampa", "tingimento", "acabamento", "corte", "outro"]),
-        dataSaida: z.coerce.date().optional(),
-        dataPrevisaoRetorno: z.coerce.date().optional(),
     }),
 });
 
