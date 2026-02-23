@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express, {NextFunction, Request, Response} from 'express';
+import express, { Request, Response} from 'express';
 import { router } from './route';
 import  'dotenv/config';
 import swaggerUi from 'swagger-ui-express';
@@ -18,7 +18,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 
 app.use(router);
 
-app.use((error: Error, _: Request, res: Response, next: NextFunction) => {
+app.use((error: Error, _: Request, res: Response) => {
 
     if (error instanceof Error) {
         return res.status(400).json({

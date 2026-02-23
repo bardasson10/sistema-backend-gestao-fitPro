@@ -1,4 +1,3 @@
-import { ICreateTipoProdutoTamanhoRequest } from "../../interfaces/IProduto";
 import prismaClient from "../../prisma";
 
 class CreateTipoProdutoTamanhoService {

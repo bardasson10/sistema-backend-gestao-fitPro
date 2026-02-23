@@ -13,7 +13,7 @@ class LogoutUserController {
         const [, token] = authToken.split(" ");
 
         const logoutService = new LogoutUserService();
-        const result = await logoutService.execute(token, usuarioId);
+        const result = await logoutService.execute(token || "", usuarioId || "");
 
         return res.json(result);
     }
