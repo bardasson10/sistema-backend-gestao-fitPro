@@ -3,14 +3,14 @@ import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProd
 
 class CreateLoteProducaoController {
     async handle(req: Request, res: Response) {
-        const { codigoLote, tecidoId, responsavelId, status, observacao, items } = req.body;
+        const { codigoLote, responsavelId, status, observacao, items, rolos } = req.body;
         const lote = await new CreateLoteProducaoService().execute({
             codigoLote,
-            tecidoId,
             responsavelId,
             status,
             observacao,
-            items
+            items,
+            rolos
         });
         return res.status(201).json(lote);
     }

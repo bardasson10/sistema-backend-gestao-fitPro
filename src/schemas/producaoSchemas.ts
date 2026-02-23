@@ -26,7 +26,6 @@ export const updateFaccaoSchema = z.object({
 export const createLoteProducaoSchema = z.object({
     body: z.object({
         codigoLote: z.string().min(1, "Código do lote é obrigatório"),
-        tecidoId: z.uuid("ID de tecido inválido").optional(),
         responsavelId: z.uuid("ID de responsável inválido"),
         status: z.enum(["planejado", "em_producao", "concluido", "cancelado"]).optional(),
         observacao: z.string().optional(),
@@ -38,10 +37,7 @@ export const createLoteProducaoSchema = z.object({
         rolos: z.array(z.object({
             estoqueRoloId: z.uuid("ID de rolo inválido"),
             pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
-        })).optional(),
-    }).refine((data) => data.tecidoId || (data.rolos && data.rolos.length > 0), {
-        message: "É necessário informar o tecidoId ou pelo menos um rolo.",
-        path: ["tecidoId"],
+        })).min(1, "Informe ao menos um rolo para identificar o tecido."),
     }),
 });
 
@@ -50,7 +46,7 @@ export const updateLoteProducaoSchema = z.object({
         codigoLote: z.string().min(1, "Código do lote é obrigatório").optional(),
         tecidoId: z.uuid("ID de tecido inválido").optional(),
         responsavelId: z.uuid("ID de responsável inválido").optional(),
-        status: z.enum(["planejado", "em_producao", "concluido", "cancelado"]).optional(),
+        status: z.string().optional(),
         observacao: z.string().optional(),
         items: z.array(z.object({
             produtoId: z.uuid("ID de produto inválido"),

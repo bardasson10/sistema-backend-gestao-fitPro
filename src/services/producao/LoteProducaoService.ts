@@ -3,7 +3,7 @@ import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } fro
 import prismaClient from "../../prisma";
 
 class CreateLoteProducaoService {
-    async execute({ codigoLote, tecidoId, responsavelId, status, observacao, items, rolos }: ICreateLoteProducaoRequest) {
+    async execute({ codigoLote, responsavelId, status, observacao, items, rolos }: ICreateLoteProducaoRequest) {
         // Verificar se código de lote já existe
         const loteAlreadyExists = await prismaClient.loteProducao.findUnique({
             where: { codigoLote }
@@ -13,62 +13,49 @@ class CreateLoteProducaoService {
             throw new Error("Lote com este código já existe.");
         }
 
-        let tecidoIdFinal = tecidoId;
+        if (!rolos || rolos.length === 0) {
+            throw new Error("É necessário informar ao menos um rolo para identificar o tecido.");
+        }
 
-        // Validar e inferir tecidoId pelos rolos se fornecidos
-        if (rolos && rolos.length > 0) {
-            const roloIds = [...new Set(rolos.map(rolo => rolo.estoqueRoloId))];
+        // Validar e inferir tecidoId pelos rolos
+        const roloIds = [...new Set(rolos.map(rolo => rolo.estoqueRoloId))];
 
-            const rolosExistentes = await prismaClient.estoqueRolo.findMany({
-                where: { id: { in: roloIds } }
-            });
+        const rolosExistentes = await prismaClient.estoqueRolo.findMany({
+            where: { id: { in: roloIds } }
+        });
 
-            if (rolosExistentes.length !== roloIds.length) {
-                throw new Error("Um ou mais rolos não encontrados.");
-            }
+        if (rolosExistentes.length !== roloIds.length) {
+            throw new Error("Um ou mais rolos não encontrados.");
+        }
 
-            if (rolosExistentes.length === 0) {
-                throw new Error("Nenhum rolo encontrado.");
-            }
+        if (rolosExistentes.length === 0) {
+            throw new Error("Nenhum rolo encontrado.");
+        }
 
-            // Inferir tecidoId do primeiro rolo
-            const primeiroRolo = rolosExistentes[0];
-            if (!primeiroRolo) {
-                throw new Error("Erro ao processar rolos.");
-            }
-            const tecidoIdRolos = primeiroRolo.tecidoId;
+        // Inferir tecidoId do primeiro rolo
+        const primeiroRolo = rolosExistentes[0];
+        if (!primeiroRolo) {
+            throw new Error("Erro ao processar rolos.");
+        }
+        const tecidoIdFinal = primeiroRolo.tecidoId;
 
-            // Verificar se todos os rolos são do mesmo tecido
-            for (const roloExistente of rolosExistentes) {
-                if (roloExistente.tecidoId !== tecidoIdRolos) {
-                    throw new Error("Todos os rolos devem pertencer ao mesmo tecido.");
-                }
-            }
-
-            // Se tecidoId foi fornecido, verificar se bate com o tecido dos rolos
-            if (tecidoId && tecidoId !== tecidoIdRolos) {
-                throw new Error("O tecidoId fornecido não corresponde ao tecido dos rolos.");
-            }
-
-            // Atualizar tecidoIdFinal
-            tecidoIdFinal = tecidoIdRolos;
-
-            // Verificar se todos os rolos têm peso suficiente
-            for (const rolo of rolos) {
-                const roloExistente = rolosExistentes.find(r => r.id === rolo.estoqueRoloId);
-                // Validar peso somente se rolo existir (já validado acima, mas por segurança de tipagem)
-                if (roloExistente && Number(roloExistente.pesoAtualKg) < rolo.pesoReservado) {
-                    throw new Error(`Rolo ${roloExistente.id} não tem peso suficiente. Disponível: ${roloExistente.pesoAtualKg}kg, Solicitado: ${rolo.pesoReservado}kg`);
-                }
+        // Verificar se todos os rolos são do mesmo tecido
+        for (const roloExistente of rolosExistentes) {
+            if (roloExistente.tecidoId !== tecidoIdFinal) {
+                throw new Error("Todos os rolos devem pertencer ao mesmo tecido.");
             }
         }
 
-        // Se tecidoIdFinal ainda não estiver definido, erro
-        if (!tecidoIdFinal) {
-            throw new Error("É necessário informar o tecidoId ou fornecer rolos para identificar o tecido.");
+        // Verificar se todos os rolos têm peso suficiente
+        for (const rolo of rolos) {
+            const roloExistente = rolosExistentes.find(r => r.id === rolo.estoqueRoloId);
+            // Validar peso somente se rolo existir (já validado acima, mas por segurança de tipagem)
+            if (roloExistente && Number(roloExistente.pesoAtualKg) < rolo.pesoReservado) {
+                throw new Error(`Rolo ${roloExistente.id} não tem peso suficiente. Disponível: ${roloExistente.pesoAtualKg}kg, Solicitado: ${rolo.pesoReservado}kg`);
+            }
         }
 
-        // Verificar se tecido existe (redundante se veio dos rolos, mas bom para garantir integridade e retornos padronizados se veio via ID apenas)
+        // Verificar se tecido existe
         const tecido = await prismaClient.tecido.findUnique({
             where: { id: tecidoIdFinal }
         });
@@ -319,17 +306,17 @@ class UpdateLoteProducaoService {
                 throw new Error("Lote não encontrado.");
             }
 
-            // Validar transições de status
-            const statusValidos: Record<string, string[]> = {
-                "planejado": ["em_producao", "cancelado"],
-                "em_producao": ["concluido", "cancelado"],
-                "concluido": [],
-                "cancelado": []
-            };
+            // // Validar transições de status
+            // const statusValidos: Record<string, string[]> = {
+            //     "planejado": ["em_producao", "cancelado"],
+            //     "em_producao": ["concluido", "cancelado"],
+            //     "concluido": [],
+            //     "cancelado": []
+            // };
 
-            if (status && !statusValidos[lote.status]?.includes(status)) {
-                throw new Error(`Não é permitido mudar status de '${lote.status}' para '${status}'.`);
-            }
+            // if (status && !statusValidos[lote.status]?.includes(status)) {
+            //     throw new Error(`Não é permitido mudar status de '${lote.status}' para '${status}'.`);
+            // }
 
             // Registrar movimentações automáticas ao iniciar produção
             if (status === "em_producao" && lote.status === "planejado" && rolosProducao && rolosProducao.length > 0) {

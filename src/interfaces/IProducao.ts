@@ -29,12 +29,11 @@ export interface ILoteRoloInput {
 
 export interface ICreateLoteProducaoRequest {
     codigoLote: string;
-    tecidoId?: string;
     responsavelId: string;
     status?: string;
     observacao?: string;
     items?: ILoteItemInput[];
-    rolos?: ILoteRoloInput[];
+    rolos: ILoteRoloInput[];
 }
 
 export interface IUpdateLoteProducaoRequest {

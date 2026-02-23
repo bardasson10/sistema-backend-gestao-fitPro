@@ -597,10 +597,15 @@ Content-Type: application/json
 
 {
   "codigoLote": "LOTE-2026-001",
-  "tecidoId": "uuid-tecido",
   "responsavelId": "uuid-usuario",
   "status": "planejado",
   "observacao": "Lote de teste",
+  "rolos": [
+    {
+      "estoqueRoloId": "uuid-rolo-1",
+      "pesoReservado": 12.5
+    }
+  ],
   "items": [
     {
       "produtoId": "uuid-produto-1",
@@ -900,7 +905,7 @@ Authorization: Bearer <token>
     POST /faccoes { nome, ... }
 
 11. Criar Lote de Produção
-    POST /lotes-producao { codigoLote, tecidoId, ..., items (com produtoId) }
+  POST /lotes-producao { codigoLote, rolos (com estoqueRoloId), ..., items (com produtoId) }
 
 12. Atualizar Status do Lote (em_producao)
     PUT /lotes-producao/:id { status: "em_producao" }
