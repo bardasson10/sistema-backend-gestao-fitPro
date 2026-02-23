@@ -32,9 +32,6 @@ class ListAllCorService {
 
         const [cores, total] = await Promise.all([
             prismaClient.cor.findMany({
-                include: {
-                    tecidos: true
-                },
                 skip,
                 take: pageLimit,
                 // Replace 'createdAt' with a valid field from your Prisma 'cor' model, e.g., 'nome'
