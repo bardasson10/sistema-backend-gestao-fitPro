@@ -27,31 +27,44 @@ class CreateDirecionamentoService {
             throw new Error("Facção inativa. Não é possível enviar direcionamentos.");
         }
 
-        // Criar direcionamento
-        const direcionamento = await prismaClient.direcionamento.create({
-            data: {
-                loteProducaoId,
-                faccaoId,
-                tipoServico,
-                dataSaida: dataSaida ? new Date(dataSaida) : new Date(),
-                dataPrevisaoRetorno: dataPrevisaoRetorno ? new Date(dataPrevisaoRetorno) : undefined,
-                status: "enviado"
-            },
-            include: {
-                lote: {
-                        include: {
-                            tecido: true,
-                            items: {
-                                include: {
-                                    produto: true,
-                                    tamanho: true
+        // Usar transação para criar direcionamento e atualizar status do lote
+        const direcionamento = await prismaClient.$transaction(async (tx) => {
+            // Atualizar status do lote de "planejado" para "em_producao"
+            if (lote.status === "planejado") {
+                await tx.loteProducao.update({
+                    where: { id: loteProducaoId },
+                    data: { status: "em_producao" }
+                });
+            }
+
+            // Criar direcionamento
+            const novorDirecionamento = await tx.direcionamento.create({
+                data: {
+                    loteProducaoId,
+                    faccaoId,
+                    tipoServico,
+                    dataSaida: dataSaida ? new Date(dataSaida) : new Date(),
+                    dataPrevisaoRetorno: dataPrevisaoRetorno ? new Date(dataPrevisaoRetorno) : undefined,
+                    status: "enviado"
+                },
+                include: {
+                    lote: {
+                            include: {
+                                tecido: true,
+                                items: {
+                                    include: {
+                                        produto: true,
+                                        tamanho: true
+                                    }
                                 }
                             }
-                        }
-                    },
-                faccao: true,
-                conferencias: true
-            }
+                        },
+                    faccao: true,
+                    conferencias: true
+                }
+            });
+
+            return novorDirecionamento;
         });
 
         return direcionamento;
