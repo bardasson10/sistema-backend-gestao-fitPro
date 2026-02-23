@@ -3,7 +3,7 @@ import { Perfil } from "../generated/prisma/enums";
 export interface ICreateUserRequest {
     nome: string;
     email: string;
-    senha: string;
+    senha?: string;
     perfil?: Perfil;
     status?: string;
     funcaoSetor?: string;

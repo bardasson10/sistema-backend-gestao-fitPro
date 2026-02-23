@@ -6,7 +6,11 @@
     "build": "tsc",
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "repository": "https://github.com/bardasson10/sistema-backend-gestao-backend.git",
   "author": "Bardasson <121575366+bardasson10@users.noreply.github.com>",

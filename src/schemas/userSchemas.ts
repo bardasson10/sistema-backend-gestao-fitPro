@@ -4,7 +4,7 @@ export const createUserSchema = z.object({
     body: z.object({
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
         email: z.email("Email inválido"),
-        senha: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+        senha: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").optional(),
         perfil: z.enum(["ADM", "GERENTE", "FUNCIONARIO"]).optional().default("FUNCIONARIO"),
         funcaoSetor: z.string().optional(),
     }),
