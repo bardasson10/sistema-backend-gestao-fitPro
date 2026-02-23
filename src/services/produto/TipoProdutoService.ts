@@ -185,9 +185,14 @@ class DeleteTipoProdutoService {
             throw new Error("Não é possível deletar um tipo de produto que possui produtos associados.");
         }
 
-        await prismaClient.tipoProduto.delete({
-            where: { id }
-        });
+        await prismaClient.$transaction([
+            prismaClient.tipoProdutoTamanho.deleteMany({
+                where: { tipoProdutoId: id }
+            }),
+            prismaClient.tipoProduto.delete({
+                where: { id }
+            })
+        ]);
 
         return { message: "Tipo de produto deletado com sucesso." };
     }
