@@ -1,15 +1,19 @@
 {
   "name": "sistema-backend-gestao-backend",
   "version": "1.0.0",
-  "main": "index.js",
   "type": "module",
   "scripts": {
+    "build": "tsc",
     "start": "tsx src/server.ts",
-    "dev": "tsx watch src/server.ts"
+    "dev": "tsx watch src/server.ts",
+    "postinstall": "prisma generate"
   },
   "repository": "https://github.com/bardasson10/sistema-backend-gestao-backend.git",
   "author": "Bardasson <121575366+bardasson10@users.noreply.github.com>",
   "license": "MIT",
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.4.0",
     "@prisma/adapter-pg": "^7.3.0",
