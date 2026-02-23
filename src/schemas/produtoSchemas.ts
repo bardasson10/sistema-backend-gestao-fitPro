@@ -60,6 +60,10 @@ export const updateProdutoSchema = z.object({
 export const createTipoProdutoTamanhoSchema = z.object({
     body: z.object({
         tipoProdutoId: z.uuid("ID de tipo inválido"),
-        tamanhoId: z.uuid("ID de tamanho inválido"),
+        tamanhos: z.array(
+            z.object({
+                tamanhoId: z.uuid("ID de tamanho inválido"),
+            })
+        ).min(1, "Informe ao menos um tamanho"),
     }),
 });

@@ -17,12 +17,27 @@ class CreateTipoProdutoService {
                 nome
             },
             include: {
-                produtos: true,
-                tamanhos: true
+                tamanhos: {
+                    include: {
+                        tamanho: true
+                    }
+                }
             }
         });
 
-        return tipoProduto;
+        return this.formatarTipoProduto(tipoProduto);
+    }
+
+    private formatarTipoProduto(tipoProduto: any) {
+        return {
+            ...tipoProduto,
+            tamanhos: tipoProduto.tamanhos.map((item: any) => ({
+                id: item.id,
+                tamanhoId: item.tamanhoId,
+                NomeTamanho: item.tamanho.nome,
+                OrdemTamanho: item.tamanho.ordem
+            }))
+        };
     }
 }
 
@@ -33,8 +48,11 @@ class ListAllTipoProdutoService {
         const [tiposProduto, total] = await Promise.all([
             prismaClient.tipoProduto.findMany({
                 include: {
-                    produtos: true,
-                    tamanhos: true
+                    tamanhos: {
+                        include: {
+                            tamanho: true
+                        }
+                    }
                 },
                 skip,
                 take: pageLimit,
@@ -45,7 +63,20 @@ class ListAllTipoProdutoService {
             prismaClient.tipoProduto.count()
         ]);
 
-        return createPaginatedResponse(tiposProduto, total, pageNumber, pageLimit);
+        const tiposFormatados = tiposProduto.map(tipo => this.formatarTipoProduto(tipo));
+        return createPaginatedResponse(tiposFormatados, total, pageNumber, pageLimit);
+    }
+
+    private formatarTipoProduto(tipoProduto: any) {
+        return {
+            ...tipoProduto,
+            tamanhos: tipoProduto.tamanhos.map((item: any) => ({
+                id: item.id,
+                tamanhoId: item.tamanhoId,
+                NomeTamanho: item.tamanho.nome,
+                OrdemTamanho: item.tamanho.ordem
+            }))
+        };
     }
 }
 
@@ -54,8 +85,11 @@ class ListByIdTipoProdutoService {
         const tipoProduto = await prismaClient.tipoProduto.findUnique({
             where: { id },
             include: {
-                produtos: true,
-                tamanhos: true
+                tamanhos: {
+                    include: {
+                        tamanho: true
+                    }
+                }
             }
         });
 
@@ -63,7 +97,19 @@ class ListByIdTipoProdutoService {
             throw new Error("Tipo de produto não encontrado.");
         }
 
-        return tipoProduto;
+        return this.formatarTipoProduto(tipoProduto);
+    }
+
+    private formatarTipoProduto(tipoProduto: any) {
+        return {
+            ...tipoProduto,
+            tamanhos: tipoProduto.tamanhos.map((item: any) => ({
+                id: item.id,
+                tamanhoId: item.tamanhoId,
+                NomeTamanho: item.tamanho.nome,
+                OrdemTamanho: item.tamanho.ordem
+            }))
+        };
     }
 }
 
@@ -96,12 +142,27 @@ class UpdateTipoProdutoService {
                 nome
             },
             include: {
-                produtos: true,
-                tamanhos: true
+                tamanhos: {
+                    include: {
+                        tamanho: true
+                    }
+                }
             }
         });
 
-        return tipoProdutoAtualizado;
+        return this.formatarTipoProduto(tipoProdutoAtualizado);
+    }
+
+    private formatarTipoProduto(tipoProduto: any) {
+        return {
+            ...tipoProduto,
+            tamanhos: tipoProduto.tamanhos.map((item: any) => ({
+                id: item.id,
+                tamanhoId: item.tamanhoId,
+                NomeTamanho: item.tamanho.nome,
+                OrdemTamanho: item.tamanho.ordem
+            }))
+        };
     }
 }
 
@@ -110,7 +171,9 @@ class DeleteTipoProdutoService {
         const tipoProduto = await prismaClient.tipoProduto.findUnique({
             where: { id },
             include: {
-                produtos: true
+                produtos: {
+                    select: { id: true }
+                }
             }
         });
 

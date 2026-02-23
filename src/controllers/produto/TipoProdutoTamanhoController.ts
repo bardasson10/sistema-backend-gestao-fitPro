@@ -3,12 +3,12 @@ import { CreateTipoProdutoTamanhoService, ListTipoProdutoTamanhoService, DeleteT
 
 class CreateTipoProdutoTamanhoController {
     async handle(req: Request, res: Response) {
-        const { tipoProdutoId, tamanhoId } = req.body;
-        const tipoProdutoTamanho = await new CreateTipoProdutoTamanhoService().execute({
+        const { tipoProdutoId, tamanhos } = req.body;
+        const result = await new CreateTipoProdutoTamanhoService().execute({
             tipoProdutoId,
-            tamanhoId
+            tamanhos
         });
-        return res.status(201).json(tipoProdutoTamanho);
+        return res.status(201).json(result);
     }
 }
 

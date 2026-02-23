@@ -2,7 +2,7 @@ import { ICreateTipoProdutoTamanhoRequest } from "../../interfaces/IProduto";
 import prismaClient from "../../prisma";
 
 class CreateTipoProdutoTamanhoService {
-    async execute({ tipoProdutoId, tamanhoId }: ICreateTipoProdutoTamanhoRequest) {
+    async execute({ tipoProdutoId, tamanhos }: any) {
         // Verificar se tipo de produto existe
         const tipoProduto = await prismaClient.tipoProduto.findUnique({
             where: { id: tipoProdutoId }
@@ -12,39 +12,60 @@ class CreateTipoProdutoTamanhoService {
             throw new Error("Tipo de produto não encontrado.");
         }
 
-        // Verificar se tamanho existe
-        const tamanho = await prismaClient.tamanho.findUnique({
-            where: { id: tamanhoId }
-        });
+        const resultados = [];
+        const erros = [];
 
-        if (!tamanho) {
-            throw new Error("Tamanho não encontrado.");
+        // Processar cada tamanho
+        for (const item of tamanhos) {
+            try {
+                const { tamanhoId } = item;
+
+                // Verificar se tamanho existe
+                const tamanho = await prismaClient.tamanho.findUnique({
+                    where: { id: tamanhoId }
+                });
+
+                if (!tamanho) {
+                    erros.push(`Tamanho ${tamanhoId} não encontrado.`);
+                    continue;
+                }
+
+                // Verificar se já existe associação
+                const jaExiste = await prismaClient.tipoProdutoTamanho.findFirst({
+                    where: {
+                        tipoProdutoId,
+                        tamanhoId
+                    }
+                });
+
+                if (jaExiste) {
+                    erros.push(`Tamanho ${tamanho.nome} já está associado a este tipo de produto.`);
+                    continue;
+                }
+
+                // Criar associação
+                const tipoProdutoTamanho = await prismaClient.tipoProdutoTamanho.create({
+                    data: {
+                        tipoProdutoId,
+                        tamanhoId
+                    },
+                    include: {
+                        tipo: true,
+                        tamanho: true
+                    }
+                });
+
+                resultados.push(tipoProdutoTamanho);
+            } catch (error) {
+                erros.push(`Erro ao processar tamanho: ${error}`);
+            }
         }
 
-        // Verificar se já existe associação
-        const jaExiste = await prismaClient.tipoProdutoTamanho.findFirst({
-            where: {
-                tipoProdutoId,
-                tamanhoId
-            }
-        });
-
-        if (jaExiste) {
-            throw new Error("Este tamanho já está associado a este tipo de produto.");
-        }
-
-        const tipoProdutoTamanho = await prismaClient.tipoProdutoTamanho.create({
-            data: {
-                tipoProdutoId,
-                tamanhoId
-            },
-            include: {
-                tipo: true,
-                tamanho: true
-            }
-        });
-
-        return tipoProdutoTamanho;
+        return {
+            message: `${resultados.length} tamanho(s) associado(s) com sucesso.`,
+            criados: resultados,
+            erros: erros.length > 0 ? erros : undefined
+        };
     }
 }
 
