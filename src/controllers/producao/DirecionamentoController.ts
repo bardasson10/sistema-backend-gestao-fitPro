@@ -32,11 +32,9 @@ class ListByIdDirecionamentoController {
 class UpdateDirecionamentoController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string 
-        const { status, dataSaida, dataPrevisaoRetorno } = req.body;
+        const { status } = req.body;
         const direcionamento = await new UpdateDirecionamentoService().execute(id, {
-            status,
-            dataSaida,
-            dataPrevisaoRetorno
+            status
         });
         return res.json(direcionamento);
     }

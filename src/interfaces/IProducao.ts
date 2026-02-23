@@ -71,8 +71,6 @@ export interface ICreateDirecionamentoRequest {
 
 export interface IUpdateDirecionamentoRequest {
     status?: string;
-    dataSaida?: string;
-    dataPrevisaoRetorno?: string;
 }
 
 // Conferencia

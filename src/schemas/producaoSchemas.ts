@@ -86,9 +86,7 @@ export const createDirecionamentoSchema = z.object({
 
 export const updateDirecionamentoSchema = z.object({
     body: z.object({
-        status: z.enum(["enviado", "em_processamento", "finalizado", "cancelado"]).optional(),
-        dataSaida: z.coerce.date().optional(),
-        dataPrevisaoRetorno: z.coerce.date().optional(),
+        status: z.enum(["enviado", "em_processamento", "recebido", "cancelado"]).optional(),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),
@@ -100,7 +98,7 @@ export const createConferenciaSchema = z.object({
         direcionamentoId: z.uuid("ID de direcionamento inválido"),
         responsavelId: z.uuid("ID de responsável inválido"),
         dataConferencia: z.coerce.date().optional(),
-        statusQualidade: z.enum(["conforme", "nao_conforme", "com_defeito"]).optional(),
+        statusQualidade: z.enum(["validando", "conforme", "nao_conforme", "com_defeito"]).optional(),
         liberadoPagamento: z.boolean().optional(),
         observacao: z.string().optional(),
         items: z.array(z.object({
@@ -116,7 +114,7 @@ export const updateConferenciaSchema = z.object({
         direcionamentoId: z.uuid("ID de direcionamento inválido").optional(),
         responsavelId: z.uuid("ID de responsável inválido").optional(),
         dataConferencia: z.coerce.date().optional(),
-        statusQualidade: z.enum(["conforme", "nao_conforme", "com_defeito"]).optional(),
+        statusQualidade: z.enum(["validando", "conforme", "nao_conforme", "com_defeito"]).optional(),
         liberadoPagamento: z.boolean().optional(),
         observacao: z.string().optional(),
         items: z.array(z.object({

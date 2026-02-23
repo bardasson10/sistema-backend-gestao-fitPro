@@ -165,10 +165,14 @@ class CreateLoteProducaoService {
                         }
                     });
                     
-                    // Se peso chegar a 0, deletar rolo; caso contrário, atualizar
+                    // Se peso chegar a 0, marcar como esgotado; caso contrário, atualizar
                     if (novopeso <= 0) {
-                        await tx.estoqueRolo.delete({
-                            where: { id: roloInfo.estoqueRoloId }
+                        await tx.estoqueRolo.update({
+                            where: { id: roloInfo.estoqueRoloId },
+                            data: {
+                                pesoAtualKg: 0,
+                                situacao: "esgotado"
+                            }
                         });
                     } else {
                         await tx.estoqueRolo.update({
@@ -397,10 +401,15 @@ class UpdateLoteProducaoService {
                         }
                     });
                     
-                    // Se peso chegar a 0, deletar rolo; caso contrário, atualizar
+                    // Se peso chegar a 0, marcar como esgotado; caso contrário, atualizar
                     if (novoPeso <= 0) {
-                        await tx.estoqueRolo.delete({
-                            where: { id: roloInfo.estoqueRoloId }
+                        // Marcar como esgotado e manter histórico do vínculo
+                        await tx.estoqueRolo.update({
+                            where: { id: roloInfo.estoqueRoloId },
+                            data: {
+                                pesoAtualKg: 0,
+                                situacao: "esgotado"
+                            }
                         });
                     } else {
                         await tx.estoqueRolo.update({

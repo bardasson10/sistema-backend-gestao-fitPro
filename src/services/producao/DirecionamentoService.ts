@@ -44,7 +44,7 @@ class CreateDirecionamentoService {
                     faccaoId,
                     tipoServico,
                     dataSaida: new Date(),
-                    dataPrevisaoRetorno: undefined,
+                    dataPrevisaoRetorno: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Exemplo: previsão de retorno em 7 dias
                     status: "enviado"
                 },
                 include: {
@@ -154,9 +154,12 @@ class ListByIdDirecionamentoService {
 }
 
 class UpdateDirecionamentoService {
-    async execute(id: string, { status, dataSaida, dataPrevisaoRetorno }: IUpdateDirecionamentoRequest) {
+    async execute(id: string, { status }: IUpdateDirecionamentoRequest) {
         const direcionamento = await prismaClient.direcionamento.findUnique({
-            where: { id }
+            where: { id },
+            include: {
+                lote: true
+            }
         });
 
         if (!direcionamento) {
@@ -165,9 +168,9 @@ class UpdateDirecionamentoService {
 
         // Validar transições de status
         const statusValidos: Record<string, string[]> = {
-            "enviado": ["em_processamento", "cancelado"],
-            "em_processamento": ["finalizado"],
-            "finalizado": [],
+            "enviado": ["em_processamento", "recebido", "cancelado"],
+            "em_processamento": ["recebido", "cancelado"],
+            "recebido": [],
             "cancelado": []
         };
 
@@ -175,28 +178,69 @@ class UpdateDirecionamentoService {
             throw new Error(`Não é permitido mudar status de '${direcionamento.status}' para '${status}'.`);
         }
 
-        const direcionamentoAtualizado = await prismaClient.direcionamento.update({
-            where: { id },
-            data: {
-                status,
-                dataSaida: dataSaida ? new Date(dataSaida) : undefined,
-                dataPrevisaoRetorno: dataPrevisaoRetorno ? new Date(dataPrevisaoRetorno) : undefined
-            },
-            include: {
-                lote: {
-                    include: {
-                        tecido: true,
-                        items: {
-                            include: {
-                                produto: true,
-                                tamanho: true
+        // Usar transação para atualizar direcionamento
+        const direcionamentoAtualizado = await prismaClient.$transaction(async (tx) => {
+            // Preparar dados para atualização
+            const dataUpdate: any = { status };
+            
+            // Se status for "recebido", preencher dataPrevisaoRetorno
+            if (status === "recebido") {
+                dataUpdate.dataPrevisaoRetorno = new Date();
+            }
+
+            if (status === "recebido") {
+                const conferenciaExistente = await tx.conferencia.findFirst({
+                    where: { direcionamentoId: id }
+                });
+
+                if (!conferenciaExistente) {
+                    if (!direcionamento.lote?.responsavelId) {
+                        throw new Error("Responsável do lote não encontrado para criar conferência.");
+                    }
+
+                    await tx.conferencia.create({
+                        data: {
+                            direcionamentoId: id,
+                            responsavelId: direcionamento.lote.responsavelId,
+                            dataConferencia: new Date(),
+                            statusQualidade: "validando",
+                            liberadoPagamento: false
+                        }
+                    });
+                }
+            }
+
+            // Atualizar direçionamento
+            const novoDir = await tx.direcionamento.update({
+                where: { id },
+                data: dataUpdate,
+                include: {
+                    lote: {
+                        include: {
+                            tecido: true,
+                            items: {
+                                include: {
+                                    produto: true,
+                                    tamanho: true
+                                }
+                            }
+                        }
+                    },
+                    faccao: true,
+                    conferencias: {
+                        include: {
+                            responsavel: true,
+                            items: {
+                                include: {
+                                    tamanho: true
+                                }
                             }
                         }
                     }
-                },
-                faccao: true,
-                conferencias: true
-            }
+                }
+            });
+
+            return novoDir;
         });
 
         return direcionamentoAtualizado;

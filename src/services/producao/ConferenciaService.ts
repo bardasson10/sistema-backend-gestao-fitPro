@@ -23,7 +23,7 @@ class CreateConferenciaService {
         }
 
         // Validar regra: só pode liberar pagamento se statusQualidade for "conforme"
-        const statusFinal = statusQualidade || "conforme";
+        const statusFinal = statusQualidade || "validando";
         const liberadoFinal = liberadoPagamento !== undefined ? liberadoPagamento : false;
         
         if (liberadoFinal && statusFinal !== "conforme") {
@@ -71,12 +71,32 @@ class ListAllConferenciaService {
     async execute(statusQualidade?: string, liberadoPagamento?: boolean, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
+        // Por padrão, mostrar apenas conferências que:
+        // - NÃO estão em (statusQualidade === "conforme" AND liberadoPagamento === true)
+        // Ou seja, mostrar as que ainda precisam de ação
+        let whereCondition: any = {};
+        
+        if (statusQualidade || liberadoPagamento !== undefined) {
+            // Se filtros são passados, usar eles
+            whereCondition = {
+                ...(statusQualidade && { statusQualidade }),
+                ...(liberadoPagamento !== undefined && { liberadoPagamento })
+            };
+        } else {
+            // Padrão: NãO mostrar conferencias finalizadas (conforme + pagamento liberado)
+            whereCondition = {
+                NOT: {
+                    AND: [
+                        { statusQualidade: "conforme" },
+                        { liberadoPagamento: true }
+                    ]
+                }
+            };
+        }
+
         const [conferencias, total] = await Promise.all([
             prismaClient.conferencia.findMany({
-                where: {
-                    ...(statusQualidade && { statusQualidade }),
-                    ...(liberadoPagamento !== undefined && { liberadoPagamento })
-                },
+                where: whereCondition,
                 include: {
                     direcionamento: {
                         include: {
