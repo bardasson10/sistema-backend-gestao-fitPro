@@ -33,11 +33,12 @@ export const createLoteProducaoSchema = z.object({
             produtoId: z.uuid("ID de produto inválido"),
             tamanhoId: z.uuid("ID de tamanho inválido"),
             quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
-        })).optional(),
-        rolos: z.array(z.object({
-            estoqueRoloId: z.uuid("ID de rolo inválido"),
-            pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
-        })).min(1, "Informe ao menos um rolo para identificar o tecido."),
+            corId: z.uuid("ID de cor inválido"),
+            rolos: z.array(z.object({
+                estoqueRoloId: z.uuid("ID de rolo inválido"),
+                pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
+            })).min(1, "Informe ao menos um rolo por item."),
+        })).min(1, "Informe ao menos um item."),
     }),
 });
 
@@ -52,6 +53,11 @@ export const updateLoteProducaoSchema = z.object({
             produtoId: z.uuid("ID de produto inválido"),
             tamanhoId: z.uuid("ID de tamanho inválido"),
             quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
+            corId: z.uuid("ID de cor inválido"),
+            rolos: z.array(z.object({
+                estoqueRoloId: z.uuid("ID de rolo inválido"),
+                pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
+            })).min(1, "Informe ao menos um rolo por item."),
         })).optional(),
         rolosProducao: z.array(z.object({
             estoqueRoloId: z.uuid("ID de rolo inválido"),
@@ -69,6 +75,11 @@ export const addLoteItemsSchema = z.object({
             produtoId: z.uuid("ID de produto inválido"),
             tamanhoId: z.uuid("ID de tamanho inválido"),
             quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
+            corId: z.uuid("ID de cor inválido"),
+            rolos: z.array(z.object({
+                estoqueRoloId: z.uuid("ID de rolo inválido"),
+                pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
+            })).min(1, "Informe ao menos um rolo por item."),
         })).min(1, "Informe ao menos um item"),
     }),
     params: z.object({

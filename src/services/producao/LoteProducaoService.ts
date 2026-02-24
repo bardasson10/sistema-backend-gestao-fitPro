@@ -3,7 +3,7 @@ import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } fro
 import prismaClient from "../../prisma";
 
 class CreateLoteProducaoService {
-    async execute({ codigoLote, responsavelId, status, observacao, items, rolos }: ICreateLoteProducaoRequest) {
+    async execute({ codigoLote, responsavelId, status, observacao, items }: ICreateLoteProducaoRequest) {
         // Verificar se código de lote já existe
         const loteAlreadyExists = await prismaClient.loteProducao.findUnique({
             where: { codigoLote }
@@ -13,15 +13,55 @@ class CreateLoteProducaoService {
             throw new Error("Lote com este código já existe.");
         }
 
-        if (!rolos || rolos.length === 0) {
+        if (!items || items.length === 0) {
+            throw new Error("É necessário informar ao menos um item.");
+        }
+
+        const itensSemRolo = items.filter(item => !item.rolos || item.rolos.length === 0);
+        if (itensSemRolo.length > 0) {
+            throw new Error("Todos os itens devem informar ao menos um rolo.");
+        }
+
+        const coresInformadas = [...new Set(items.map(item => item.corId))];
+        if (coresInformadas.length > 1) {
+            throw new Error("Todos os itens do lote devem ter a mesma cor.");
+        }
+
+        const rolosReservadosPorItem = items.flatMap(item =>
+            item.rolos.map(rolo => ({
+                estoqueRoloId: rolo.estoqueRoloId,
+                pesoReservado: rolo.pesoReservado,
+                corId: item.corId
+            }))
+        );
+
+        if (rolosReservadosPorItem.length === 0) {
             throw new Error("É necessário informar ao menos um rolo para identificar o tecido.");
         }
 
+        const rolosAgrupadosMap = new Map<string, number>();
+        for (const rolo of rolosReservadosPorItem) {
+            const pesoAtual = rolosAgrupadosMap.get(rolo.estoqueRoloId) ?? 0;
+            rolosAgrupadosMap.set(rolo.estoqueRoloId, pesoAtual + rolo.pesoReservado);
+        }
+
+        const rolosAgrupados = Array.from(rolosAgrupadosMap.entries()).map(([estoqueRoloId, pesoReservado]) => ({
+            estoqueRoloId,
+            pesoReservado
+        }));
+
         // Validar e inferir tecidoId pelos rolos
-        const roloIds = [...new Set(rolos.map(rolo => rolo.estoqueRoloId))];
+        const roloIds = rolosAgrupados.map(rolo => rolo.estoqueRoloId);
 
         const rolosExistentes = await prismaClient.estoqueRolo.findMany({
-            where: { id: { in: roloIds } }
+            where: { id: { in: roloIds } },
+            include: {
+                tecido: {
+                    select: {
+                        corId: true
+                    }
+                }
+            }
         });
 
         if (rolosExistentes.length !== roloIds.length) {
@@ -30,6 +70,19 @@ class CreateLoteProducaoService {
 
         if (rolosExistentes.length === 0) {
             throw new Error("Nenhum rolo encontrado.");
+        }
+
+        const rolosPorId = new Map(rolosExistentes.map(rolo => [rolo.id, rolo]));
+
+        for (const roloReservado of rolosReservadosPorItem) {
+            const rolo = rolosPorId.get(roloReservado.estoqueRoloId);
+            if (!rolo) {
+                throw new Error(`Rolo ${roloReservado.estoqueRoloId} não encontrado.`);
+            }
+
+            if (rolo.tecido.corId !== roloReservado.corId) {
+                throw new Error(`Rolo ${rolo.id} não pertence à cor informada para o item.`);
+            }
         }
 
         // Inferir tecidoId do primeiro rolo
@@ -46,9 +99,13 @@ class CreateLoteProducaoService {
             }
         }
 
+        if (coresInformadas[0] && primeiroRolo.tecido.corId !== coresInformadas[0]) {
+            throw new Error("A cor dos itens deve ser a mesma dos rolos informados.");
+        }
+
         // Verificar se todos os rolos têm peso suficiente
-        for (const rolo of rolos) {
-            const roloExistente = rolosExistentes.find(r => r.id === rolo.estoqueRoloId);
+        for (const rolo of rolosAgrupados) {
+            const roloExistente = rolosPorId.get(rolo.estoqueRoloId);
             // Validar peso somente se rolo existir (já validado acima, mas por segurança de tipagem)
             if (roloExistente && Number(roloExistente.pesoAtualKg) < rolo.pesoReservado) {
                 throw new Error(`Rolo ${roloExistente.id} não tem peso suficiente. Disponível: ${roloExistente.pesoAtualKg}kg, Solicitado: ${rolo.pesoReservado}kg`);
@@ -106,19 +163,19 @@ class CreateLoteProducaoService {
                     responsavelId,
                     status: status || "planejado",
                     observacao,
-                    items: items ? {
+                    items: {
                         create: items.map(item => ({
                             produtoId: item.produtoId,
                             tamanhoId: item.tamanhoId,
                             quantidadePlanejada: item.quantidadePlanejada
                         }))
-                    } : undefined,
-                    rolos: rolos ? {
-                        create: rolos.map(rolo => ({
+                    },
+                    rolos: {
+                        create: rolosAgrupados.map(rolo => ({
                             estoqueRoloId: rolo.estoqueRoloId,
                             pesoReservado: rolo.pesoReservado
                         }))
-                    } : undefined
+                    }
                 },
                 include: {
                     tecido: {
@@ -148,12 +205,12 @@ class CreateLoteProducaoService {
             });
 
             // Diminuir peso dos rolos e registrar movimentações de estoque
-            for (const roloInfo of rolos) {
-                const roloExistente = rolosExistentes.find(r => r.id === roloInfo.estoqueRoloId);
+            for (const roloInfo of rolosAgrupados) {
+                const roloExistente = rolosPorId.get(roloInfo.estoqueRoloId);
                 
                 if (roloExistente) {
                     // Atualizar peso do rolo
-                    const novopeso = Number(roloExistente.pesoAtualKg) - roloInfo.pesoReservado;
+                    const novoPeso = Number(roloExistente.pesoAtualKg) - roloInfo.pesoReservado;
                     
                     // Registrar movimentação de estoque
                     await tx.movimentacaoEstoque.create({
@@ -166,7 +223,7 @@ class CreateLoteProducaoService {
                     });
                     
                     // Se peso chegar a 0, marcar como esgotado; caso contrário, atualizar
-                    if (novopeso <= 0) {
+                    if (novoPeso <= 0) {
                         await tx.estoqueRolo.update({
                             where: { id: roloInfo.estoqueRoloId },
                             data: {
@@ -178,7 +235,7 @@ class CreateLoteProducaoService {
                         await tx.estoqueRolo.update({
                             where: { id: roloInfo.estoqueRoloId },
                             data: {
-                                pesoAtualKg: novopeso,
+                                pesoAtualKg: novoPeso,
                                 situacao: "disponivel"
                             }
                         });
@@ -343,7 +400,14 @@ class UpdateLoteProducaoService {
     async execute(id: string, { codigoLote, tecidoId, responsavelId, status, observacao, items, rolosProducao, usuarioId }: IUpdateLoteProducaoRequest) {
         return prismaClient.$transaction(async (tx) => {
             const lote = await tx.loteProducao.findUnique({
-                where: { id }
+                where: { id },
+                include: {
+                    tecido: {
+                        select: {
+                            corId: true
+                        }
+                    }
+                }
             });
 
             if (!lote) {
@@ -459,6 +523,10 @@ class UpdateLoteProducaoService {
                     throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
                 }
 
+                if (tecidoId && tecidoId !== lote.tecidoId) {
+                    throw new Error("Não é permitido alterar o tecido e adicionar itens/rolos na mesma atualização.");
+                }
+
                 const produtoIds = [...new Set(items.map(item => item.produtoId))];
                 const tamanhoIds = [...new Set(items.map(item => item.tamanhoId))];
 
@@ -478,6 +546,83 @@ class UpdateLoteProducaoService {
                     throw new Error("Um ou mais tamanhos não encontrados.");
                 }
 
+                const coresInformadas = [...new Set(items.map(item => item.corId))];
+                if (coresInformadas.length > 1) {
+                    throw new Error("Todos os itens enviados na atualização devem ter a mesma cor.");
+                }
+
+                if (coresInformadas[0] !== lote.tecido.corId) {
+                    throw new Error("A cor dos itens deve ser igual à cor do tecido do lote.");
+                }
+
+                const itensSemRolo = items.filter(item => !item.rolos || item.rolos.length === 0);
+                if (itensSemRolo.length > 0) {
+                    throw new Error("Todos os itens devem informar ao menos um rolo.");
+                }
+
+                const rolosReservadosPorItem = items.flatMap(item =>
+                    item.rolos.map(rolo => ({
+                        estoqueRoloId: rolo.estoqueRoloId,
+                        pesoReservado: rolo.pesoReservado,
+                        corId: item.corId
+                    }))
+                );
+
+                const rolosAgrupadosMap = new Map<string, number>();
+                for (const rolo of rolosReservadosPorItem) {
+                    const pesoAtual = rolosAgrupadosMap.get(rolo.estoqueRoloId) ?? 0;
+                    rolosAgrupadosMap.set(rolo.estoqueRoloId, pesoAtual + rolo.pesoReservado);
+                }
+
+                const rolosAgrupados = Array.from(rolosAgrupadosMap.entries()).map(([estoqueRoloId, pesoReservado]) => ({
+                    estoqueRoloId,
+                    pesoReservado
+                }));
+
+                const roloIds = rolosAgrupados.map(rolo => rolo.estoqueRoloId);
+                const rolosExistentes = await tx.estoqueRolo.findMany({
+                    where: { id: { in: roloIds } },
+                    include: {
+                        tecido: {
+                            select: {
+                                corId: true
+                            }
+                        }
+                    }
+                });
+
+                if (rolosExistentes.length !== roloIds.length) {
+                    throw new Error("Um ou mais rolos não encontrados.");
+                }
+
+                const rolosPorId = new Map(rolosExistentes.map(rolo => [rolo.id, rolo]));
+
+                for (const roloReservado of rolosReservadosPorItem) {
+                    const rolo = rolosPorId.get(roloReservado.estoqueRoloId);
+                    if (!rolo) {
+                        throw new Error(`Rolo ${roloReservado.estoqueRoloId} não encontrado.`);
+                    }
+
+                    if (rolo.tecidoId !== lote.tecidoId) {
+                        throw new Error(`Rolo ${rolo.id} não pertence ao tecido do lote.`);
+                    }
+
+                    if (rolo.tecido.corId !== roloReservado.corId) {
+                        throw new Error(`Rolo ${rolo.id} não pertence à cor informada para o item.`);
+                    }
+                }
+
+                for (const roloReservado of rolosAgrupados) {
+                    const rolo = rolosPorId.get(roloReservado.estoqueRoloId);
+                    if (!rolo) {
+                        throw new Error(`Rolo ${roloReservado.estoqueRoloId} não encontrado.`);
+                    }
+
+                    if (Number(rolo.pesoAtualKg) < roloReservado.pesoReservado) {
+                        throw new Error(`Rolo ${rolo.id} não tem peso suficiente. Disponível: ${rolo.pesoAtualKg}kg, Solicitado: ${roloReservado.pesoReservado}kg`);
+                    }
+                }
+
                 // Adicionar novos items
                 await tx.loteItem.createMany({
                     data: items.map(item => ({
@@ -487,6 +632,58 @@ class UpdateLoteProducaoService {
                         quantidadePlanejada: item.quantidadePlanejada
                     }))
                 });
+
+                for (const roloReservado of rolosAgrupados) {
+                    const rolo = rolosPorId.get(roloReservado.estoqueRoloId);
+                    if (!rolo) {
+                        continue;
+                    }
+
+                    const novoPeso = Number(rolo.pesoAtualKg) - roloReservado.pesoReservado;
+
+                    await tx.movimentacaoEstoque.create({
+                        data: {
+                            estoqueRoloId: roloReservado.estoqueRoloId,
+                            usuarioId: usuarioId ?? lote.responsavelId,
+                            tipoMovimentacao: "saida",
+                            pesoMovimentado: roloReservado.pesoReservado
+                        }
+                    });
+
+                    await tx.estoqueRolo.update({
+                        where: { id: roloReservado.estoqueRoloId },
+                        data: {
+                            pesoAtualKg: novoPeso <= 0 ? 0 : novoPeso,
+                            situacao: novoPeso <= 0 ? "esgotado" : "disponivel"
+                        }
+                    });
+
+                    const loteRoloExistente = await tx.loteRolo.findFirst({
+                        where: {
+                            loteProducaoId: id,
+                            estoqueRoloId: roloReservado.estoqueRoloId
+                        }
+                    });
+
+                    if (loteRoloExistente) {
+                        await tx.loteRolo.update({
+                            where: { id: loteRoloExistente.id },
+                            data: {
+                                pesoReservado: {
+                                    increment: roloReservado.pesoReservado
+                                }
+                            }
+                        });
+                    } else {
+                        await tx.loteRolo.create({
+                            data: {
+                                loteProducaoId: id,
+                                estoqueRoloId: roloReservado.estoqueRoloId,
+                                pesoReservado: roloReservado.pesoReservado
+                            }
+                        });
+                    }
+                }
             }
 
             const loteAtualizado = await tx.loteProducao.update({
@@ -531,14 +728,21 @@ class UpdateLoteProducaoService {
 }
 
 class AddLoteItemsService {
-    async execute(id: string, { items }: IAddLoteItemsRequest) {
+    async execute(id: string, { items, usuarioId }: IAddLoteItemsRequest) {
         if (!items || items.length === 0) {
             throw new Error("Informe ao menos um item.");
         }
 
         const loteAtualizado = await prismaClient.$transaction(async (tx) => {
             const lote = await tx.loteProducao.findUnique({
-                where: { id }
+                where: { id },
+                include: {
+                    tecido: {
+                        select: {
+                            corId: true
+                        }
+                    }
+                }
             });
 
             if (!lote) {
@@ -547,6 +751,20 @@ class AddLoteItemsService {
 
             if (["concluido", "cancelado"].includes(lote.status)) {
                 throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
+            }
+
+            const itensSemRolo = items.filter(item => !item.rolos || item.rolos.length === 0);
+            if (itensSemRolo.length > 0) {
+                throw new Error("Todos os itens devem informar ao menos um rolo.");
+            }
+
+            const coresInformadas = [...new Set(items.map(item => item.corId))];
+            if (coresInformadas.length > 1) {
+                throw new Error("Todos os itens enviados devem ter a mesma cor.");
+            }
+
+            if (coresInformadas[0] !== lote.tecido.corId) {
+                throw new Error("A cor dos itens deve ser igual à cor do tecido do lote.");
             }
 
             const produtoIds = [...new Set(items.map(item => item.produtoId))];
@@ -568,6 +786,69 @@ class AddLoteItemsService {
                 throw new Error("Um ou mais tamanhos não encontrados.");
             }
 
+            const rolosReservadosPorItem = items.flatMap(item =>
+                item.rolos.map(rolo => ({
+                    estoqueRoloId: rolo.estoqueRoloId,
+                    pesoReservado: rolo.pesoReservado,
+                    corId: item.corId
+                }))
+            );
+
+            const rolosAgrupadosMap = new Map<string, number>();
+            for (const rolo of rolosReservadosPorItem) {
+                const pesoAtual = rolosAgrupadosMap.get(rolo.estoqueRoloId) ?? 0;
+                rolosAgrupadosMap.set(rolo.estoqueRoloId, pesoAtual + rolo.pesoReservado);
+            }
+
+            const rolosAgrupados = Array.from(rolosAgrupadosMap.entries()).map(([estoqueRoloId, pesoReservado]) => ({
+                estoqueRoloId,
+                pesoReservado
+            }));
+
+            const roloIds = rolosAgrupados.map(rolo => rolo.estoqueRoloId);
+            const rolosExistentes = await tx.estoqueRolo.findMany({
+                where: { id: { in: roloIds } },
+                include: {
+                    tecido: {
+                        select: {
+                            corId: true
+                        }
+                    }
+                }
+            });
+
+            if (rolosExistentes.length !== roloIds.length) {
+                throw new Error("Um ou mais rolos não encontrados.");
+            }
+
+            const rolosPorId = new Map(rolosExistentes.map(rolo => [rolo.id, rolo]));
+
+            for (const roloReservado of rolosReservadosPorItem) {
+                const rolo = rolosPorId.get(roloReservado.estoqueRoloId);
+                if (!rolo) {
+                    throw new Error(`Rolo ${roloReservado.estoqueRoloId} não encontrado.`);
+                }
+
+                if (rolo.tecidoId !== lote.tecidoId) {
+                    throw new Error(`Rolo ${rolo.id} não pertence ao tecido do lote.`);
+                }
+
+                if (rolo.tecido.corId !== roloReservado.corId) {
+                    throw new Error(`Rolo ${rolo.id} não pertence à cor informada para o item.`);
+                }
+            }
+
+            for (const roloReservado of rolosAgrupados) {
+                const rolo = rolosPorId.get(roloReservado.estoqueRoloId);
+                if (!rolo) {
+                    throw new Error(`Rolo ${roloReservado.estoqueRoloId} não encontrado.`);
+                }
+
+                if (Number(rolo.pesoAtualKg) < roloReservado.pesoReservado) {
+                    throw new Error(`Rolo ${rolo.id} não tem peso suficiente. Disponível: ${rolo.pesoAtualKg}kg, Solicitado: ${roloReservado.pesoReservado}kg`);
+                }
+            }
+
             await tx.loteItem.createMany({
                 data: items.map(item => ({
                     loteProducaoId: id,
@@ -576,6 +857,58 @@ class AddLoteItemsService {
                     quantidadePlanejada: item.quantidadePlanejada
                 }))
             });
+
+            for (const roloReservado of rolosAgrupados) {
+                const rolo = rolosPorId.get(roloReservado.estoqueRoloId);
+                if (!rolo) {
+                    continue;
+                }
+
+                const novoPeso = Number(rolo.pesoAtualKg) - roloReservado.pesoReservado;
+
+                await tx.movimentacaoEstoque.create({
+                    data: {
+                        estoqueRoloId: roloReservado.estoqueRoloId,
+                        usuarioId: usuarioId ?? lote.responsavelId,
+                        tipoMovimentacao: "saida",
+                        pesoMovimentado: roloReservado.pesoReservado
+                    }
+                });
+
+                await tx.estoqueRolo.update({
+                    where: { id: roloReservado.estoqueRoloId },
+                    data: {
+                        pesoAtualKg: novoPeso <= 0 ? 0 : novoPeso,
+                        situacao: novoPeso <= 0 ? "esgotado" : "disponivel"
+                    }
+                });
+
+                const loteRoloExistente = await tx.loteRolo.findFirst({
+                    where: {
+                        loteProducaoId: id,
+                        estoqueRoloId: roloReservado.estoqueRoloId
+                    }
+                });
+
+                if (loteRoloExistente) {
+                    await tx.loteRolo.update({
+                        where: { id: loteRoloExistente.id },
+                        data: {
+                            pesoReservado: {
+                                increment: roloReservado.pesoReservado
+                            }
+                        }
+                    });
+                } else {
+                    await tx.loteRolo.create({
+                        data: {
+                            loteProducaoId: id,
+                            estoqueRoloId: roloReservado.estoqueRoloId,
+                            pesoReservado: roloReservado.pesoReservado
+                        }
+                    });
+                }
+            }
 
             return tx.loteProducao.findUnique({
                 where: { id },

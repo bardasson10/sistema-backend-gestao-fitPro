@@ -42,7 +42,7 @@ export const swaggerSpec = generator.generateDocument({
             description: 'Servidor de Desenvolvimento'
         },
         {
-            url: 'https://api.fitpro.com',
+            url: 'https://sistema-backend-gestao-fitpro.onrender.com',
             description: 'Servidor de Produção'
         }
     ],

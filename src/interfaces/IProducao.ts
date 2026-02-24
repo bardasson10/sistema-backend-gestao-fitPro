@@ -27,13 +27,17 @@ export interface ILoteRoloInput {
     pesoReservado: number;
 }
 
+export interface ILoteItemComRolosInput extends ILoteItemInput {
+    corId: string;
+    rolos: ILoteRoloInput[];
+}
+
 export interface ICreateLoteProducaoRequest {
     codigoLote: string;
     responsavelId: string;
     status?: string;
     observacao?: string;
-    items?: ILoteItemInput[];
-    rolos: ILoteRoloInput[];
+    items: ILoteItemComRolosInput[];
 }
 
 export interface IUpdateLoteProducaoRequest {
@@ -42,13 +46,14 @@ export interface IUpdateLoteProducaoRequest {
     responsavelId?: string;
     status?: string;
     observacao?: string;
-    items?: ILoteItemInput[];
+    items?: ILoteItemComRolosInput[];
     rolosProducao?: Array<{ estoqueRoloId: string; pesoUtilizado: number }>; // Rolos usados ao iniciar produção (movimentação automática)
     usuarioId?: string; // ID do usuário para movimentação automática
 }
 
 export interface IAddLoteItemsRequest {
-    items: ILoteItemInput[];
+    items: ILoteItemComRolosInput[];
+    usuarioId?: string;
 }
 
 export interface ILoteProducaoResponse {

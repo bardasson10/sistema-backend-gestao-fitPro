@@ -3,14 +3,13 @@ import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProd
 
 class CreateLoteProducaoController {
     async handle(req: Request, res: Response) {
-        const { codigoLote, responsavelId, status, observacao, items, rolos } = req.body;
+        const { codigoLote, responsavelId, status, observacao, items } = req.body;
         const lote = await new CreateLoteProducaoService().execute({
             codigoLote,
             responsavelId,
             status,
             observacao,
-            items,
-            rolos
+            items
         });
         return res.status(201).json(lote);
     }
@@ -35,12 +34,16 @@ class ListByIdLoteProducaoController {
 class UpdateLoteProducaoController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string;
-        const { status, observacao, rolosProducao } = req.body;
+        const { codigoLote, tecidoId, responsavelId, status, observacao, items, rolosProducao } = req.body;
         const usuarioId = req.userId; // Pega o ID do usuário autenticado
 
         const lote = await new UpdateLoteProducaoService().execute(id, {
+            codigoLote,
+            tecidoId,
+            responsavelId,
             status,
             observacao,
+            items,
             rolosProducao,
             usuarioId
         });
@@ -52,7 +55,8 @@ class AddLoteItemsController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string
         const { items } = req.body;
-        const lote = await new AddLoteItemsService().execute(id, { items });
+        const usuarioId = req.userId;
+        const lote = await new AddLoteItemsService().execute(id, { items, usuarioId });
         return res.json(lote);
     }
 }
