@@ -23,9 +23,9 @@ class CreateLoteProducaoService {
         }
 
         const coresInformadas = [...new Set(items.map(item => item.corId))];
-        if (coresInformadas.length > 1) {
-            throw new Error("Todos os itens do lote devem ter a mesma cor.");
-        }
+        // if (coresInformadas.length > 1) {
+        //     throw new Error("Todos os itens do lote devem ter a mesma cor.");
+        // }
 
         const rolosReservadosPorItem = items.flatMap(item =>
             item.rolos.map(rolo => ({
