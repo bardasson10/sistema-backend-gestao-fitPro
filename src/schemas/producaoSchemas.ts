@@ -32,7 +32,7 @@ export const createLoteProducaoSchema = z.object({
         items: z.array(z.object({
             produtoId: z.uuid("ID de produto inválido"),
             tamanhoId: z.uuid("ID de tamanho inválido"),
-            quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
+            quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
             corId: z.uuid("ID de cor inválido"),
             rolos: z.array(z.object({
                 estoqueRoloId: z.uuid("ID de rolo inválido"),
@@ -52,7 +52,7 @@ export const updateLoteProducaoSchema = z.object({
         items: z.array(z.object({
             produtoId: z.uuid("ID de produto inválido"),
             tamanhoId: z.uuid("ID de tamanho inválido"),
-            quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
+            quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
             corId: z.uuid("ID de cor inválido"),
             rolos: z.array(z.object({
                 estoqueRoloId: z.uuid("ID de rolo inválido"),
@@ -74,7 +74,7 @@ export const addLoteItemsSchema = z.object({
         items: z.array(z.object({
             produtoId: z.uuid("ID de produto inválido"),
             tamanhoId: z.uuid("ID de tamanho inválido"),
-            quantidadePlanejada: z.number().int().positive("Quantidade deve ser positiva"),
+            quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
             corId: z.uuid("ID de cor inválido"),
             rolos: z.array(z.object({
                 estoqueRoloId: z.uuid("ID de rolo inválido"),
