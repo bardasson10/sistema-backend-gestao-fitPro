@@ -22,11 +22,6 @@ class CreateLoteProducaoService {
             throw new Error("Todos os itens devem informar ao menos um rolo.");
         }
 
-        const coresInformadas = [...new Set(items.map(item => item.corId))];
-        // if (coresInformadas.length > 1) {
-        //     throw new Error("Todos os itens do lote devem ter a mesma cor.");
-        // }
-
         const rolosReservadosPorItem = items.flatMap(item =>
             item.rolos.map(rolo => ({
                 estoqueRoloId: rolo.estoqueRoloId,
@@ -64,9 +59,6 @@ class CreateLoteProducaoService {
             }
         });
 
-        if (rolosExistentes.length !== roloIds.length) {
-            throw new Error("Um ou mais rolos não encontrados.");
-        }
 
         if (rolosExistentes.length === 0) {
             throw new Error("Nenhum rolo encontrado.");
@@ -91,17 +83,6 @@ class CreateLoteProducaoService {
             throw new Error("Erro ao processar rolos.");
         }
         const tecidoIdFinal = primeiroRolo.tecidoId;
-
-        // Verificar se todos os rolos são do mesmo tecido
-        for (const roloExistente of rolosExistentes) {
-            if (roloExistente.tecidoId !== tecidoIdFinal) {
-                throw new Error("Todos os rolos devem pertencer ao mesmo tecido.");
-            }
-        }
-
-        if (coresInformadas[0] && primeiroRolo.tecido.corId !== coresInformadas[0]) {
-            throw new Error("A cor dos itens deve ser a mesma dos rolos informados.");
-        }
 
         // Verificar se todos os rolos têm peso suficiente
         for (const rolo of rolosAgrupados) {
