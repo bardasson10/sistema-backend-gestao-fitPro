@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express, { Request, Response} from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { router } from './route';
 import  'dotenv/config';
 import swaggerUi from 'swagger-ui-express';
@@ -18,8 +18,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 
 app.use(router);
 
-app.use((error: Error, _: Request, res: Response) => {
-
+app.use((error: Error, _: Request, res: Response, _next: NextFunction) => {
     if (error instanceof Error) {
         return res.status(400).json({
             error: error.message
@@ -29,8 +28,7 @@ app.use((error: Error, _: Request, res: Response) => {
         status: "error",
         message: "Internal Server Error"
     });
-    
-})
+});
 const PORT = process.env.PORT! || 3333;
 
 app.listen(PORT, () => {
