@@ -173,6 +173,8 @@ model EstoqueRolo {
   tecido            Tecido   @relation(fields: [tecidoId], references: [id])
   movimentacoes     MovimentacaoEstoque[]
   lotes             LoteRolo[]
+  itemRolos         LoteItemRolo[]
+  enfestoRolos      EnfestoRolo[]
 
   @@index([tecidoId])
   @@index([situacao])
@@ -261,8 +263,54 @@ model LoteItem {
   lote               LoteProducao @relation(fields: [loteProducaoId], references: [id])
   produto            Produto      @relation(fields: [produtoId], references: [id])
   tamanho            Tamanho      @relation(fields: [tamanhoId], references: [id])
+  rolos              LoteItemRolo[]
+  enfestos           Enfesto[]
 
   @@map("lote_item")
+}
+
+model Enfesto {
+  id                String       @id @default(uuid())
+  loteItemId        String       @map("lote_item_id")
+  cor               String       @db.VarChar(25)
+  qtdFolhas         Int          @map("qtd_folhas")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Date
+
+  loteItem          LoteItem     @relation(fields: [loteItemId], references: [id], onDelete: Cascade)
+  rolos             EnfestoRolo[]
+
+  @@index([loteItemId])
+  @@map("enfesto")
+}
+
+model EnfestoRolo {
+  id                String      @id @default(uuid())
+  enfestoId         String      @map("enfesto_id")
+  estoqueRoloId     String      @map("estoque_rolo_id")
+  pesoReservado     Decimal     @map("peso_reservado") @db.Decimal(10, 3)
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  enfesto           Enfesto     @relation(fields: [enfestoId], references: [id], onDelete: Cascade)
+  rolo              EstoqueRolo @relation(fields: [estoqueRoloId], references: [id])
+
+  @@index([enfestoId])
+  @@index([estoqueRoloId])
+  @@map("enfesto_rolo")
+}
+
+model LoteItemRolo {
+  id                String   @id @default(uuid())
+  loteItemId        String   @map("lote_item_id")
+  estoqueRoloId     String   @map("estoque_rolo_id")
+  pesoReservado     Decimal  @map("peso_reservado") @db.Decimal(10, 3)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  loteItem          LoteItem     @relation(fields: [loteItemId], references: [id], onDelete: Cascade)
+  rolo              EstoqueRolo  @relation(fields: [estoqueRoloId], references: [id])
+
+  @@index([loteItemId])
+  @@index([estoqueRoloId])
+  @@map("lote_item_rolo")
 }
 
 model Direcionamento {
