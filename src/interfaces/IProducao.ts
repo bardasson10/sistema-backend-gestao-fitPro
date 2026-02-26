@@ -27,9 +27,36 @@ export interface ILoteRoloInput {
     pesoReservado: number;
 }
 
-export interface ILoteItemComRolosInput extends ILoteItemInput {
+export interface IEnfestoRoloInput {
+    estoqueRoloId: string;
+}
+
+export interface IEnfestoInput {
+    corId: string; // ID da cor
+    qtdFolhas: number;
+    rolos: IEnfestoRoloInput[];
+}
+
+export interface ILoteItemComEnfestosInput extends ILoteItemInput {
+    enfestos: IEnfestoInput[];
+}
+
+export interface IEnfestoComItemsInput extends IEnfestoInput {
+    items: ILoteItemInput[];
+}
+
+export interface IEnfestoComItensProducaoInput {
     corId: string;
-    rolos: ILoteRoloInput[];
+    qtdFolhas: number;
+    rolosProducao: Array<{ estoqueRoloId: string; pesoReservado: number }>;
+    itens: ILoteItemInput[];
+}
+
+export interface IEnfestoComItensInput {
+    corId: string;
+    qtdFolhas: number;
+    rolosProducao: Array<{ estoqueRoloId: string }>;
+    itens: ILoteItemInput[];
 }
 
 export interface ICreateLoteProducaoRequest {
@@ -37,22 +64,21 @@ export interface ICreateLoteProducaoRequest {
     responsavelId: string;
     status?: string;
     observacao?: string;
-    items: ILoteItemComRolosInput[];
+    rolos: ILoteRoloInput[];
 }
 
 export interface IUpdateLoteProducaoRequest {
+    loteId?: string;
     codigoLote?: string;
-    tecidoId?: string;
     responsavelId?: string;
     status?: string;
     observacao?: string;
-    items?: ILoteItemComRolosInput[];
-    rolosProducao?: Array<{ estoqueRoloId: string; pesoUtilizado: number }>; // Rolos usados ao iniciar produção (movimentação automática)
+    enfestos?: IEnfestoComItensProducaoInput[];
     usuarioId?: string; // ID do usuário para movimentação automática
 }
 
 export interface IAddLoteItemsRequest {
-    items: ILoteItemComRolosInput[];
+    enfestos: IEnfestoComItensInput[];
     usuarioId?: string;
 }
 

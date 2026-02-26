@@ -1,5 +1,32 @@
 import { z } from "zod";
 
+const enfestoComItensProducaoSchema = z.object({
+    corId: z.uuid("ID de cor inválido"),
+    qtdFolhas: z.number().int().positive("Quantidade de folhas deve ser maior que zero"),
+    rolosProducao: z.array(z.object({
+        estoqueRoloId: z.uuid("ID de rolo inválido"),
+        pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
+    })).min(1, "Informe ao menos um rolo por enfesto."),
+    itens: z.array(z.object({
+        produtoId: z.uuid("ID de produto inválido"),
+        tamanhoId: z.uuid("ID de tamanho inválido"),
+        quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
+    })).min(1, "Informe ao menos um item por enfesto."),
+});
+
+const enfestoComItensSchema = z.object({
+    corId: z.uuid("ID de cor inválido"),
+    qtdFolhas: z.number().int().positive("Quantidade de folhas deve ser maior que zero"),
+    rolosProducao: z.array(z.object({
+        estoqueRoloId: z.uuid("ID de rolo inválido"),
+    })).min(1, "Informe ao menos um rolo por enfesto."),
+    itens: z.array(z.object({
+        produtoId: z.uuid("ID de produto inválido"),
+        tamanhoId: z.uuid("ID de tamanho inválido"),
+        quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
+    })).min(1, "Informe ao menos um item por enfesto."),
+});
+
 export const createFaccaoSchema = z.object({
     body: z.object({
         nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -29,40 +56,21 @@ export const createLoteProducaoSchema = z.object({
         responsavelId: z.uuid("ID de responsável inválido"),
         status: z.enum(["planejado", "em_producao", "concluido", "cancelado"]).optional(),
         observacao: z.string().optional(),
-        items: z.array(z.object({
-            produtoId: z.uuid("ID de produto inválido"),
-            tamanhoId: z.uuid("ID de tamanho inválido"),
-            quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
-            corId: z.uuid("ID de cor inválido"),
-            rolos: z.array(z.object({
-                estoqueRoloId: z.uuid("ID de rolo inválido"),
-                pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
-            })).min(1, "Informe ao menos um rolo por item."),
-        })).min(1, "Informe ao menos um item."),
+        rolos: z.array(z.object({
+            estoqueRoloId: z.uuid("ID de rolo inválido"),
+            pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
+        })).min(1, "Informe ao menos um rolo."),
     }),
 });
 
 export const updateLoteProducaoSchema = z.object({
     body: z.object({
+        loteId: z.uuid("ID de lote inválido").optional(),
         codigoLote: z.string().min(1, "Código do lote é obrigatório").optional(),
-        tecidoId: z.uuid("ID de tecido inválido").optional(),
         responsavelId: z.uuid("ID de responsável inválido").optional(),
         status: z.string().optional(),
         observacao: z.string().optional(),
-        items: z.array(z.object({
-            produtoId: z.uuid("ID de produto inválido"),
-            tamanhoId: z.uuid("ID de tamanho inválido"),
-            quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
-            corId: z.uuid("ID de cor inválido"),
-            rolos: z.array(z.object({
-                estoqueRoloId: z.uuid("ID de rolo inválido"),
-                pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
-            })).min(1, "Informe ao menos um rolo por item."),
-        })).optional(),
-        rolosProducao: z.array(z.object({
-            estoqueRoloId: z.uuid("ID de rolo inválido"),
-            pesoUtilizado: z.number().positive("Peso utilizado deve ser positivo"),
-        })).optional(),
+        enfestos: z.array(enfestoComItensProducaoSchema).optional(),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),
@@ -71,16 +79,7 @@ export const updateLoteProducaoSchema = z.object({
 
 export const addLoteItemsSchema = z.object({
     body: z.object({
-        items: z.array(z.object({
-            produtoId: z.uuid("ID de produto inválido"),
-            tamanhoId: z.uuid("ID de tamanho inválido"),
-            quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
-            corId: z.uuid("ID de cor inválido"),
-            rolos: z.array(z.object({
-                estoqueRoloId: z.uuid("ID de rolo inválido"),
-                pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
-            })).min(1, "Informe ao menos um rolo por item."),
-        })).min(1, "Informe ao menos um item"),
+        enfestos: z.array(enfestoComItensSchema).min(1, "Informe ao menos um enfesto"),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),
