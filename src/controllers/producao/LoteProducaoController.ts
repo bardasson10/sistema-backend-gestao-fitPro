@@ -34,7 +34,7 @@ class ListByIdLoteProducaoController {
 class UpdateLoteProducaoController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string;
-        const { loteId, codigoLote, responsavelId, status, observacao, enfestos } = req.body;
+        const { loteId, codigoLote, responsavelId, status, observacao, qtdFolhas, enfestos } = req.body;
         const usuarioId = req.userId; // Pega o ID do usuário autenticado
 
         const lote = await new UpdateLoteProducaoService().execute(id, {
@@ -43,6 +43,7 @@ class UpdateLoteProducaoController {
             responsavelId,
             status,
             observacao,
+            qtdFolhas,
             enfestos,
             usuarioId
         });

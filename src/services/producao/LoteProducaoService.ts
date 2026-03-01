@@ -2,6 +2,11 @@ import { IAddLoteItemsRequest, ICreateLoteProducaoRequest, IEnfestoComItensInput
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
+const INTERACTIVE_TRANSACTION_OPTIONS = {
+    maxWait: 10000,
+    timeout: 120000
+};
+
 const loteInclude = {
     tecido: {
         include: {
@@ -87,9 +92,13 @@ function extrairRolosReservados(items: ILoteItemComEnfestosInput[]) {
     return rolosReservados;
 }
 
-function normalizarItemsEntrada(enfestos?: IEnfestoComItensProducaoInput[]): ILoteItemComEnfestosInput[] {
+function normalizarItemsEntrada(enfestos?: IEnfestoComItensProducaoInput[], qtdFolhas?: number): ILoteItemComEnfestosInput[] {
     if (!enfestos?.length) {
         return [];
+    }
+
+    if (!qtdFolhas || qtdFolhas <= 0) {
+        throw new Error("qtdFolhas é obrigatório e deve ser maior que zero para atualizar enfestos.");
     }
 
     return enfestos.flatMap(enfesto =>
@@ -100,7 +109,7 @@ function normalizarItemsEntrada(enfestos?: IEnfestoComItensProducaoInput[]): ILo
             enfestos: [
                 {
                     corId: enfesto.corId,
-                    qtdFolhas: enfesto.qtdFolhas,
+                    qtdFolhas,
                     rolos: enfesto.rolosProducao.map(rolo => ({
                         estoqueRoloId: rolo.estoqueRoloId
                     }))
@@ -131,6 +140,53 @@ function normalizarItemsEntradaAdd(enfestos?: IEnfestoComItensInput[]): ILoteIte
             ]
         }))
     );
+}
+
+function criarChaveConsolidacaoItem(item: ILoteItemComEnfestosInput) {
+    const enfestosOrdenados = [...item.enfestos].sort((a, b) => {
+        const rolosA = [...a.rolos].map(rolo => rolo.estoqueRoloId).sort().join(",");
+        const rolosB = [...b.rolos].map(rolo => rolo.estoqueRoloId).sort().join(",");
+        const chaveA = `${a.corId}|${a.qtdFolhas}|${rolosA}`;
+        const chaveB = `${b.corId}|${b.qtdFolhas}|${rolosB}`;
+        return chaveA.localeCompare(chaveB);
+    });
+
+    const enfestosKey = enfestosOrdenados
+        .map(enfesto => {
+            const rolosKey = [...enfesto.rolos].map(rolo => rolo.estoqueRoloId).sort().join(",");
+            return `${enfesto.corId}|${enfesto.qtdFolhas}|${rolosKey}`;
+        })
+        .join("||");
+
+    return `${item.produtoId}|${item.tamanhoId}|${enfestosKey}`;
+}
+
+function consolidarItemsNormalizados(items: ILoteItemComEnfestosInput[]) {
+    const itensConsolidados = new Map<string, ILoteItemComEnfestosInput>();
+
+    for (const item of items) {
+        const chave = criarChaveConsolidacaoItem(item);
+        const existente = itensConsolidados.get(chave);
+
+        if (!existente) {
+            itensConsolidados.set(chave, {
+                ...item,
+                enfestos: item.enfestos.map(enfesto => ({
+                    ...enfesto,
+                    rolos: enfesto.rolos.map(rolo => ({ ...rolo }))
+                }))
+            });
+            continue;
+        }
+
+        existente.quantidadePlanejada += item.quantidadePlanejada;
+    }
+
+    return Array.from(itensConsolidados.values());
+}
+
+function filtrarItensComQuantidadePositiva(items: ILoteItemComEnfestosInput[]) {
+    return items.filter(item => item.quantidadePlanejada > 0);
 }
 
 function extrairRolosProducaoDosEnfestos(enfestos?: IEnfestoComItensProducaoInput[]) {
@@ -200,6 +256,36 @@ async function validarProdutosETamanhos(tx: any, items: ILoteItemComEnfestosInpu
     }
 }
 
+async function obterNomesCorPorId(tx: any, items: ILoteItemComEnfestosInput[]) {
+    const corIds = [...new Set(items.flatMap(item => item.enfestos.map(enfesto => enfesto.corId)))];
+
+    const cores = await tx.cor.findMany({
+        where: { id: { in: corIds } },
+        select: {
+            id: true,
+            nome: true
+        }
+    });
+
+    if (cores.length !== corIds.length) {
+        throw new Error("Uma ou mais cores não foram encontradas.");
+    }
+
+    for (const cor of cores) {
+        if (!cor.nome || String(cor.nome).trim().length === 0) {
+            throw new Error(`Cor ${cor.id} está sem nome cadastrado.`);
+        }
+
+        if (String(cor.nome).length > 25) {
+            throw new Error(`Nome da cor ${cor.id} excede 25 caracteres e não pode ser salvo em enfesto.`);
+        }
+    }
+
+    return new Map<string, string>(
+        cores.map((cor: any) => [cor.id, String(cor.nome)])
+    );
+}
+
 async function validarRolos(tx: any, rolosReservadosPorEnfesto: RoloReservado[]): Promise<{
     rolosAgrupados: Array<{ estoqueRoloId: string }>;
     rolosPorId: Map<string, any>;
@@ -263,6 +349,22 @@ async function obterPesosReservadosPorRoloNoLote(tx: any, loteId: string, rolosI
     );
 }
 
+async function validarRolosPertencemAoLote(tx: any, loteId: string, rolosIds: string[]) {
+    const loteRolos = await tx.loteRolo.findMany({
+        where: {
+            loteProducaoId: loteId,
+            estoqueRoloId: { in: rolosIds }
+        },
+        select: {
+            estoqueRoloId: true
+        }
+    });
+
+    if (loteRolos.length !== rolosIds.length) {
+        throw new Error("Todos os rolos informados devem estar vinculados ao lote na inicialização.");
+    }
+}
+
 function formatarLoteResponse(lote: any) {
     const rolosList = lote.rolos.map((lr: any) => ({
         ...lr.rolo,
@@ -270,15 +372,6 @@ function formatarLoteResponse(lote: any) {
     }));
 
     const pesoTotal = rolosList.reduce((acumulador: number, rolo: any) => acumulador + Number(rolo.pesoReservado), 0);
-
-    const qtdFolhasPorCor = new Map<string, number>();
-    for (const item of lote.items) {
-        for (const enfesto of item.enfestos ?? []) {
-            const corKey = enfesto.corId;
-            const qtdAtual = qtdFolhasPorCor.get(corKey) ?? 0;
-            qtdFolhasPorCor.set(corKey, qtdAtual + enfesto.qtdFolhas);
-        }
-    }
 
     const coresMap = new Map<string, { cor: any; rolos: any[] }>();
     for (const rolo of rolosList) {
@@ -296,6 +389,90 @@ function formatarLoteResponse(lote: any) {
         grupoCor.rolos.push(rolo);
     }
 
+    const corNomeParaId = new Map<string, string>();
+    for (const [corId, grupoCor] of coresMap.entries()) {
+        if (!grupoCor.cor?.nome) {
+            continue;
+        }
+        corNomeParaId.set(String(grupoCor.cor.nome).trim().toLowerCase(), corId);
+    }
+
+    const corIdsDisponiveis = Array.from(coresMap.keys()).filter(corId => !corId.startsWith("sem-cor-"));
+
+    const resolverCorKeyEnfesto = (enfesto: any) => {
+        const valorOriginal = enfesto?.corId ?? enfesto?.cor;
+        if (!valorOriginal) {
+            return undefined;
+        }
+
+        if (coresMap.has(valorOriginal)) {
+            return valorOriginal;
+        }
+
+        const valorNormalizado = String(valorOriginal).trim().toLowerCase();
+        return corNomeParaId.get(valorNormalizado);
+    };
+
+    const qtdFolhasPorCor = new Map<string, number>();
+    const gradeLotePorCor = new Map<string, any[]>();
+    const gradeLotePorCorSet = new Set<string>();
+    const enfestosComputados = new Set<string>();
+
+    const montarGradeItem = (item: any) => ({
+        id: item.id,
+        produtoId: item.produtoId,
+        tamanhoId: item.tamanhoId,
+        quantidadePlanejada: Number(item.quantidadePlanejada),
+        produtoNome: item.produto?.nome,
+        sku: item.produto?.sku,
+        tamanhoNome: item.tamanho?.nome
+    });
+
+    const adicionarGradePorCor = (corKey: string, item: any) => {
+        const chaveUnica = `${corKey}:${item.id}`;
+        if (gradeLotePorCorSet.has(chaveUnica)) {
+            return;
+        }
+
+        const gradeCorAtual = gradeLotePorCor.get(corKey) ?? [];
+        gradeCorAtual.push(montarGradeItem(item));
+        gradeLotePorCor.set(corKey, gradeCorAtual);
+        gradeLotePorCorSet.add(chaveUnica);
+    };
+
+    for (const item of lote.items) {
+        const enfestosItem = item.enfestos ?? [];
+
+        if (enfestosItem.length === 0) {
+            for (const corId of corIdsDisponiveis) {
+                adicionarGradePorCor(corId, item);
+            }
+            continue;
+        }
+
+        for (const enfesto of item.enfestos ?? []) {
+            const corKey = resolverCorKeyEnfesto(enfesto);
+            if (!corKey) {
+                continue;
+            }
+
+            const rolosKey = (enfesto.rolos ?? [])
+                .map((enfestoRolo: any) => enfestoRolo.estoqueRoloId)
+                .filter(Boolean)
+                .sort()
+                .join(",");
+
+            const enfestoKey = `${corKey}|${enfesto.qtdFolhas}|${rolosKey}`;
+            if (!enfestosComputados.has(enfestoKey)) {
+                const qtdAtual = qtdFolhasPorCor.get(corKey) ?? 0;
+                qtdFolhasPorCor.set(corKey, qtdAtual + enfesto.qtdFolhas);
+                enfestosComputados.add(enfestoKey);
+            }
+
+            adicionarGradePorCor(corKey, item);
+        }
+    }
+
     const cores = Array.from(coresMap.values()).map(grupoCor => ({
         corId: grupoCor.cor?.id,
         nome: grupoCor.cor?.nome,
@@ -307,17 +484,8 @@ function formatarLoteResponse(lote: any) {
             pesoAtualKg: Number(rolo.pesoAtualKg),
             pesoReservado: Number(rolo.pesoReservado),
             situacao: rolo.situacao
-        }))
-    }));
-
-    const gradeLote = lote.items.map((item: any) => ({
-        id: item.id,
-        produtoId: item.produtoId,
-        tamanhoId: item.tamanhoId,
-        quantidadePlanejada: Number(item.quantidadePlanejada),
-        produtoNome: item.produto?.nome,
-        sku: item.produto?.sku,
-        tamanhoNome: item.tamanho?.nome
+        })),
+        gradeLote: gradeLotePorCor.get(grupoCor.cor?.id ?? "") ?? []
     }));
 
     const materiais = [
@@ -357,7 +525,6 @@ function formatarLoteResponse(lote: any) {
             funcaoSetor: lote.responsavel?.funcaoSetor
         },
         materiais,
-        gradeLote,
         direcionamentos
     };
 }
@@ -467,7 +634,7 @@ class CreateLoteProducaoService {
             }
 
             return novoLote;
-        });
+        }, INTERACTIVE_TRANSACTION_OPTIONS);
 
         return formatarLoteResponse(lote);
     }
@@ -527,7 +694,7 @@ class ListByIdLoteProducaoService {
 }
 
 class UpdateLoteProducaoService {
-    async execute(id: string, { loteId, codigoLote, responsavelId, status, observacao, enfestos, usuarioId }: IUpdateLoteProducaoRequest) {
+    async execute(id: string, { loteId, codigoLote, responsavelId, status, observacao, qtdFolhas, enfestos, usuarioId }: IUpdateLoteProducaoRequest) {
         return prismaClient.$transaction(async (tx) => {
             const lote = await tx.loteProducao.findUnique({
                 where: { id }
@@ -548,6 +715,9 @@ class UpdateLoteProducaoService {
                     throw new Error("usuárioId é obrigatório para registrar movimentações automáticas.");
                 }
 
+                const rolosIdsEntrada = [...new Set(rolosProducaoEntrada.map(rolo => rolo.estoqueRoloId))];
+                await validarRolosPertencemAoLote(tx, id, rolosIdsEntrada);
+
                 for (const roloInfo of rolosProducaoEntrada) {
                     const rolo = await tx.estoqueRolo.findUnique({
                         where: { id: roloInfo.estoqueRoloId }
@@ -555,10 +725,6 @@ class UpdateLoteProducaoService {
 
                     if (!rolo) {
                         throw new Error(`Rolo ${roloInfo.estoqueRoloId} não encontrado.`);
-                    }
-
-                    if (rolo.tecidoId !== lote.tecidoId) {
-                        throw new Error(`Rolo ${roloInfo.estoqueRoloId} não é do tecido especificado no lote.`);
                     }
 
                     if (Number(rolo.pesoAtualKg) < roloInfo.pesoReservado) {
@@ -604,52 +770,53 @@ class UpdateLoteProducaoService {
                 }
             }
 
-            const itemsNormalizados = normalizarItemsEntrada(enfestos);
+            const itemsNormalizados = consolidarItemsNormalizados(normalizarItemsEntrada(enfestos, qtdFolhas));
+            const itemsComQuantidadePositiva = filtrarItensComQuantidadePositiva(itemsNormalizados);
 
-            if (itemsNormalizados.length > 0) {
+            if (enfestos !== undefined) {
+                await tx.loteItem.deleteMany({
+                    where: { loteProducaoId: id }
+                });
+            }
+
+            if (itemsComQuantidadePositiva.length > 0) {
                 if (["concluido", "cancelado"].includes(lote.status)) {
                     throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
                 }
 
-                await validarProdutosETamanhos(tx, itemsNormalizados);
+                await validarProdutosETamanhos(tx, itemsComQuantidadePositiva);
+                const nomesCorPorId = await obterNomesCorPorId(tx, itemsComQuantidadePositiva);
 
-                const rolosReservadosPorEnfesto = extrairRolosReservados(itemsNormalizados);
-                const { rolosAgrupados, rolosPorId } = await validarRolos(tx, rolosReservadosPorEnfesto);
+                const rolosReservadosPorEnfesto = extrairRolosReservados(itemsComQuantidadePositiva);
+                const { rolosAgrupados } = await validarRolos(tx, rolosReservadosPorEnfesto);
                 const rolosIds = rolosAgrupados.map(rolo => rolo.estoqueRoloId);
                 const pesosReservadosPorRolo = await obterPesosReservadosPorRoloNoLote(tx, id, rolosIds);
 
-                for (const roloInfo of rolosAgrupados) {
-                    const rolo = rolosPorId.get(roloInfo.estoqueRoloId) as any;
-                    if (!rolo) {
-                        continue;
-                    }
-
-                    if (rolo.tecidoId !== lote.tecidoId) {
-                        throw new Error(`Rolo ${roloInfo.estoqueRoloId} não pertence ao tecido do lote.`);
-                    }
-                }
-
-                for (const item of itemsNormalizados) {
-                    await tx.loteItem.create({
+                for (const item of itemsComQuantidadePositiva) {
+                    const loteItemCriado = await tx.loteItem.create({
                         data: {
                             loteProducaoId: id,
                             produtoId: item.produtoId,
                             tamanhoId: item.tamanhoId,
-                            quantidadePlanejada: calcularQuantidadePlanejadaComFolhas(item),
-                            enfestos: {
-                                create: item.enfestos.map(enfesto => ({
-                                    cor: enfesto.corId,
-                                    qtdFolhas: enfesto.qtdFolhas,
-                                    rolos: {
-                                        create: enfesto.rolos.map(rolo => ({
-                                            estoqueRoloId: rolo.estoqueRoloId,
-                                            pesoReservado: pesosReservadosPorRolo.get(rolo.estoqueRoloId) ?? 0
-                                        }))
-                                    }
-                                }))
-                            }
+                            quantidadePlanejada: calcularQuantidadePlanejadaComFolhas(item)
                         }
                     });
+
+                    for (const enfesto of item.enfestos) {
+                        await tx.enfesto.create({
+                            data: {
+                                loteItemId: loteItemCriado.id,
+                                cor: nomesCorPorId.get(enfesto.corId) as string,
+                                qtdFolhas: enfesto.qtdFolhas,
+                                rolos: {
+                                    create: enfesto.rolos.map(rolo => ({
+                                        estoqueRoloId: rolo.estoqueRoloId,
+                                        pesoReservado: pesosReservadosPorRolo.get(rolo.estoqueRoloId) ?? 0
+                                    }))
+                                }
+                            }
+                        });
+                    }
                 }
             }
 
@@ -665,16 +832,18 @@ class UpdateLoteProducaoService {
             });
 
             return formatarLoteResponse(loteAtualizado);
-        });
+        }, INTERACTIVE_TRANSACTION_OPTIONS);
     }
 }
 
 class AddLoteItemsService {
-    async execute(id: string, { enfestos }: IAddLoteItemsRequest) {
-        const itemsNormalizados = normalizarItemsEntradaAdd(enfestos);
+    async execute(id: string, { enfestos, usuarioId }: IAddLoteItemsRequest) {
+        const itemsNormalizados = filtrarItensComQuantidadePositiva(
+            consolidarItemsNormalizados(normalizarItemsEntradaAdd(enfestos))
+        );
 
         if (!itemsNormalizados || itemsNormalizados.length === 0) {
-            throw new Error("Informe ao menos um item.");
+            throw new Error("Informe ao menos um item com quantidadePlanejada maior que zero.");
         }
 
         const loteAtualizado = await prismaClient.$transaction(async (tx) => {
@@ -690,7 +859,12 @@ class AddLoteItemsService {
                 throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
             }
 
+            if (!usuarioId) {
+                throw new Error("usuárioId é obrigatório para registrar movimentações automáticas.");
+            }
+
             await validarProdutosETamanhos(tx, itemsNormalizados);
+            const nomesCorPorId = await obterNomesCorPorId(tx, itemsNormalizados);
 
             const rolosReservadosPorEnfesto = extrairRolosReservados(itemsNormalizados);
             const { rolosAgrupados, rolosPorId } = await validarRolos(tx, rolosReservadosPorEnfesto);
@@ -700,42 +874,67 @@ class AddLoteItemsService {
             for (const roloInfo of rolosAgrupados) {
                 const rolo = rolosPorId.get(roloInfo.estoqueRoloId) as any;
                 if (!rolo) {
-                    continue;
+                    throw new Error(`Rolo ${roloInfo.estoqueRoloId} não encontrado.`);
                 }
 
-                if (rolo.tecidoId !== lote.tecidoId) {
-                    throw new Error(`Rolo ${roloInfo.estoqueRoloId} não pertence ao tecido do lote.`);
+                const pesoReservado = pesosReservadosPorRolo.get(roloInfo.estoqueRoloId) ?? 0;
+
+                if (Number(rolo.pesoAtualKg) < pesoReservado) {
+                    throw new Error(`Rolo ${roloInfo.estoqueRoloId} não tem peso suficiente. Disponível: ${rolo.pesoAtualKg}kg, Solicitado: ${pesoReservado}kg`);
                 }
+
+                const novoPeso = Number(rolo.pesoAtualKg) - pesoReservado;
+
+                await tx.movimentacaoEstoque.create({
+                    data: {
+                        estoqueRoloId: roloInfo.estoqueRoloId,
+                        usuarioId,
+                        tipoMovimentacao: "saida",
+                        pesoMovimentado: pesoReservado
+                    }
+                });
+
+                await tx.estoqueRolo.update({
+                    where: { id: roloInfo.estoqueRoloId },
+                    data: {
+                        pesoAtualKg: novoPeso <= 0 ? 0 : novoPeso,
+                        situacao: novoPeso <= 0 ? "esgotado" : "disponivel"
+                    }
+                });
             }
 
             for (const item of itemsNormalizados) {
-                await tx.loteItem.create({
+                const loteItemCriado = await tx.loteItem.create({
                     data: {
                         loteProducaoId: id,
                         produtoId: item.produtoId,
                         tamanhoId: item.tamanhoId,
-                        quantidadePlanejada: calcularQuantidadePlanejadaComFolhas(item),
-                        enfestos: {
-                            create: item.enfestos.map(enfesto => ({
-                                cor: enfesto.corId,
-                                qtdFolhas: enfesto.qtdFolhas,
-                                rolos: {
-                                    create: enfesto.rolos.map(rolo => ({
-                                        estoqueRoloId: rolo.estoqueRoloId,
-                                        pesoReservado: pesosReservadosPorRolo.get(rolo.estoqueRoloId) ?? 0
-                                    }))
-                                }
-                            }))
-                        }
+                        quantidadePlanejada: calcularQuantidadePlanejadaComFolhas(item)
                     }
                 });
+
+                for (const enfesto of item.enfestos) {
+                    await tx.enfesto.create({
+                        data: {
+                            loteItemId: loteItemCriado.id,
+                            cor: nomesCorPorId.get(enfesto.corId) as string,
+                            qtdFolhas: enfesto.qtdFolhas,
+                            rolos: {
+                                create: enfesto.rolos.map(rolo => ({
+                                    estoqueRoloId: rolo.estoqueRoloId,
+                                    pesoReservado: pesosReservadosPorRolo.get(rolo.estoqueRoloId) ?? 0
+                                }))
+                            }
+                        }
+                    });
+                }
             }
 
             return tx.loteProducao.findUnique({
                 where: { id },
                 include: loteInclude
             });
-        });
+        }, INTERACTIVE_TRANSACTION_OPTIONS);
 
         if (!loteAtualizado) {
             throw new Error("Erro ao atualizar lote.");

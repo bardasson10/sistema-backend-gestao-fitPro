@@ -47,7 +47,6 @@ export interface IEnfestoComItemsInput extends IEnfestoInput {
 
 export interface IEnfestoComItensProducaoInput {
     corId: string;
-    qtdFolhas: number;
     rolosProducao: Array<{ estoqueRoloId: string; pesoReservado: number }>;
     itens: ILoteItemInput[];
 }
@@ -73,6 +72,7 @@ export interface IUpdateLoteProducaoRequest {
     responsavelId?: string;
     status?: string;
     observacao?: string;
+    qtdFolhas?: number;
     enfestos?: IEnfestoComItensProducaoInput[];
     usuarioId?: string; // ID do usuário para movimentação automática
 }
