@@ -837,7 +837,7 @@ class UpdateLoteProducaoService {
 }
 
 class AddLoteItemsService {
-    async execute(id: string, { enfestos, usuarioId }: IAddLoteItemsRequest) {
+    async execute(id: string, { enfestos }: IAddLoteItemsRequest) {
         const itemsNormalizados = filtrarItensComQuantidadePositiva(
             consolidarItemsNormalizados(normalizarItemsEntradaAdd(enfestos))
         );
@@ -859,49 +859,13 @@ class AddLoteItemsService {
                 throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
             }
 
-            if (!usuarioId) {
-                throw new Error("usuárioId é obrigatório para registrar movimentações automáticas.");
-            }
-
             await validarProdutosETamanhos(tx, itemsNormalizados);
             const nomesCorPorId = await obterNomesCorPorId(tx, itemsNormalizados);
 
             const rolosReservadosPorEnfesto = extrairRolosReservados(itemsNormalizados);
-            const { rolosAgrupados, rolosPorId } = await validarRolos(tx, rolosReservadosPorEnfesto);
+            const { rolosAgrupados } = await validarRolos(tx, rolosReservadosPorEnfesto);
             const rolosIds = rolosAgrupados.map(rolo => rolo.estoqueRoloId);
             const pesosReservadosPorRolo = await obterPesosReservadosPorRoloNoLote(tx, id, rolosIds);
-
-            for (const roloInfo of rolosAgrupados) {
-                const rolo = rolosPorId.get(roloInfo.estoqueRoloId) as any;
-                if (!rolo) {
-                    throw new Error(`Rolo ${roloInfo.estoqueRoloId} não encontrado.`);
-                }
-
-                const pesoReservado = pesosReservadosPorRolo.get(roloInfo.estoqueRoloId) ?? 0;
-
-                if (Number(rolo.pesoAtualKg) < pesoReservado) {
-                    throw new Error(`Rolo ${roloInfo.estoqueRoloId} não tem peso suficiente. Disponível: ${rolo.pesoAtualKg}kg, Solicitado: ${pesoReservado}kg`);
-                }
-
-                const novoPeso = Number(rolo.pesoAtualKg) - pesoReservado;
-
-                await tx.movimentacaoEstoque.create({
-                    data: {
-                        estoqueRoloId: roloInfo.estoqueRoloId,
-                        usuarioId,
-                        tipoMovimentacao: "saida",
-                        pesoMovimentado: pesoReservado
-                    }
-                });
-
-                await tx.estoqueRolo.update({
-                    where: { id: roloInfo.estoqueRoloId },
-                    data: {
-                        pesoAtualKg: novoPeso <= 0 ? 0 : novoPeso,
-                        situacao: novoPeso <= 0 ? "esgotado" : "disponivel"
-                    }
-                });
-            }
 
             for (const item of itemsNormalizados) {
                 const loteItemCriado = await tx.loteItem.create({
