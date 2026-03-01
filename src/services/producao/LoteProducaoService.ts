@@ -189,6 +189,14 @@ function filtrarItensComQuantidadePositiva(items: ILoteItemComEnfestosInput[]) {
     return items.filter(item => item.quantidadePlanejada > 0);
 }
 
+function ordenarRolosIds(rolos: Array<{ estoqueRoloId: string }>) {
+    return [...rolos].map(rolo => rolo.estoqueRoloId).sort();
+}
+
+function criarChaveItemPorCorERolos(produtoId: string, tamanhoId: string, cor: string, rolosIds: string[]) {
+    return `${produtoId}|${tamanhoId}|${String(cor).trim().toLowerCase()}|${rolosIds.join(",")}`;
+}
+
 function extrairRolosProducaoDosEnfestos(enfestos?: IEnfestoComItensProducaoInput[]) {
     if (!enfestos?.length) {
         return [] as Array<{ estoqueRoloId: string; pesoReservado: number }>;
@@ -774,9 +782,66 @@ class UpdateLoteProducaoService {
             const itemsComQuantidadePositiva = filtrarItensComQuantidadePositiva(itemsNormalizados);
 
             if (enfestos !== undefined) {
-                await tx.loteItem.deleteMany({
-                    where: { loteProducaoId: id }
+                const nomesCorPorIdTodos = itemsNormalizados.length > 0
+                    ? await obterNomesCorPorId(tx, itemsNormalizados)
+                    : new Map<string, string>();
+
+                const itensExistentes = await tx.loteItem.findMany({
+                    where: { loteProducaoId: id },
+                    include: {
+                        enfestos: {
+                            include: {
+                                rolos: true
+                            }
+                        }
+                    }
                 });
+
+                const itemExistentePorChave = new Map<string, string>();
+                const chavesPorItemId = new Map<string, string[]>();
+
+                for (const itemExistente of itensExistentes) {
+                    const chavesDoItem: string[] = [];
+
+                    for (const enfestoExistente of itemExistente.enfestos) {
+                        const chave = criarChaveItemPorCorERolos(
+                            itemExistente.produtoId,
+                            itemExistente.tamanhoId,
+                            enfestoExistente.cor,
+                            ordenarRolosIds(enfestoExistente.rolos)
+                        );
+
+                        itemExistentePorChave.set(chave, itemExistente.id);
+                        chavesDoItem.push(chave);
+                    }
+
+                    chavesPorItemId.set(itemExistente.id, chavesDoItem);
+                }
+
+                for (const item of itemsNormalizados) {
+                    for (const enfesto of item.enfestos) {
+                        const nomeCor = nomesCorPorIdTodos.get(enfesto.corId) as string;
+                        const chave = criarChaveItemPorCorERolos(
+                            item.produtoId,
+                            item.tamanhoId,
+                            nomeCor,
+                            ordenarRolosIds(enfesto.rolos)
+                        );
+
+                        const itemIdExistente = itemExistentePorChave.get(chave);
+                        if (itemIdExistente) {
+                            await tx.loteItem.delete({
+                                where: { id: itemIdExistente }
+                            });
+
+                            const chavesAntigas = chavesPorItemId.get(itemIdExistente) ?? [];
+                            for (const chaveAntiga of chavesAntigas) {
+                                itemExistentePorChave.delete(chaveAntiga);
+                            }
+                            chavesPorItemId.delete(itemIdExistente);
+                        }
+                    }
+                }
             }
 
             if (itemsComQuantidadePositiva.length > 0) {
@@ -862,12 +927,67 @@ class AddLoteItemsService {
             await validarProdutosETamanhos(tx, itemsNormalizados);
             const nomesCorPorId = await obterNomesCorPorId(tx, itemsNormalizados);
 
+            const itensExistentes = await tx.loteItem.findMany({
+                where: { loteProducaoId: id },
+                include: {
+                    enfestos: {
+                        include: {
+                            rolos: true
+                        }
+                    }
+                }
+            });
+
+            const itemExistentePorChave = new Map<string, string>();
+            const chavesPorItemId = new Map<string, string[]>();
+
+            for (const itemExistente of itensExistentes) {
+                const chavesDoItem: string[] = [];
+
+                for (const enfestoExistente of itemExistente.enfestos) {
+                    const chave = criarChaveItemPorCorERolos(
+                        itemExistente.produtoId,
+                        itemExistente.tamanhoId,
+                        enfestoExistente.cor,
+                        ordenarRolosIds(enfestoExistente.rolos)
+                    );
+
+                    itemExistentePorChave.set(chave, itemExistente.id);
+                    chavesDoItem.push(chave);
+                }
+
+                chavesPorItemId.set(itemExistente.id, chavesDoItem);
+            }
+
             const rolosReservadosPorEnfesto = extrairRolosReservados(itemsNormalizados);
             const { rolosAgrupados } = await validarRolos(tx, rolosReservadosPorEnfesto);
             const rolosIds = rolosAgrupados.map(rolo => rolo.estoqueRoloId);
             const pesosReservadosPorRolo = await obterPesosReservadosPorRoloNoLote(tx, id, rolosIds);
 
             for (const item of itemsNormalizados) {
+                for (const enfesto of item.enfestos) {
+                    const nomeCor = nomesCorPorId.get(enfesto.corId) as string;
+                    const chave = criarChaveItemPorCorERolos(
+                        item.produtoId,
+                        item.tamanhoId,
+                        nomeCor,
+                        ordenarRolosIds(enfesto.rolos)
+                    );
+
+                    const itemIdExistente = itemExistentePorChave.get(chave);
+                    if (itemIdExistente) {
+                        await tx.loteItem.delete({
+                            where: { id: itemIdExistente }
+                        });
+
+                        const chavesAntigas = chavesPorItemId.get(itemIdExistente) ?? [];
+                        for (const chaveAntiga of chavesAntigas) {
+                            itemExistentePorChave.delete(chaveAntiga);
+                        }
+                        chavesPorItemId.delete(itemIdExistente);
+                    }
+                }
+
                 const loteItemCriado = await tx.loteItem.create({
                     data: {
                         loteProducaoId: id,
