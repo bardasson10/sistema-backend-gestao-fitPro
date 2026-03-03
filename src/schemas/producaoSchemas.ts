@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const enfestoComItensProducaoSchema = z.object({
     corId: z.uuid("ID de cor inválido"),
+    qtdFolhas: z.number().int().positive("Quantidade de folhas deve ser maior que zero"),
     rolosProducao: z.array(z.object({
         estoqueRoloId: z.uuid("ID de rolo inválido"),
         pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
@@ -69,7 +70,6 @@ export const updateLoteProducaoSchema = z.object({
         responsavelId: z.uuid("ID de responsável inválido").optional(),
         status: z.string().optional(),
         observacao: z.string().optional(),
-        qtdFolhas: z.number().int().positive("Quantidade de folhas deve ser maior que zero").optional(),
         enfestos: z.array(enfestoComItensProducaoSchema).optional(),
     }),
     params: z.object({

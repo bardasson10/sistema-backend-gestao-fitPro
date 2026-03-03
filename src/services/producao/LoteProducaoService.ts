@@ -32,7 +32,15 @@ const loteInclude = {
                 include: {
                     rolos: {
                         include: {
-                            rolo: true
+                            rolo: {
+                                include: {
+                                    tecido: {
+                                        include: {
+                                            cor: true
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -92,13 +100,9 @@ function extrairRolosReservados(items: ILoteItemComEnfestosInput[]) {
     return rolosReservados;
 }
 
-function normalizarItemsEntrada(enfestos?: IEnfestoComItensProducaoInput[], qtdFolhas?: number): ILoteItemComEnfestosInput[] {
+function normalizarItemsEntrada(enfestos?: IEnfestoComItensProducaoInput[]): ILoteItemComEnfestosInput[] {
     if (!enfestos?.length) {
         return [];
-    }
-
-    if (!qtdFolhas || qtdFolhas <= 0) {
-        throw new Error("qtdFolhas é obrigatório e deve ser maior que zero para atualizar enfestos.");
     }
 
     return enfestos.flatMap(enfesto =>
@@ -109,7 +113,7 @@ function normalizarItemsEntrada(enfestos?: IEnfestoComItensProducaoInput[], qtdF
             enfestos: [
                 {
                     corId: enfesto.corId,
-                    qtdFolhas,
+                    qtdFolhas: enfesto.qtdFolhas,
                     rolos: enfesto.rolosProducao.map(rolo => ({
                         estoqueRoloId: rolo.estoqueRoloId
                     }))
@@ -380,6 +384,13 @@ function formatarLoteResponse(lote: any) {
     }));
 
     const pesoTotal = rolosList.reduce((acumulador: number, rolo: any) => acumulador + Number(rolo.pesoReservado), 0);
+    const valorPorKgTotal = Array.from(
+        new Map<string, number>(
+            rolosList
+                .filter((rolo: any) => rolo?.tecido?.id)
+                .map((rolo: any) => [rolo.tecido.id, Number(rolo.tecido?.valorPorKg ?? 0)])
+        ).values()
+    ).reduce((acumulador: number, valor: number) => acumulador + valor, 0);
 
     const coresMap = new Map<string, { cor: any; rolos: any[] }>();
     for (const rolo of rolosList) {
@@ -410,6 +421,18 @@ function formatarLoteResponse(lote: any) {
     const resolverCorKeyEnfesto = (enfesto: any) => {
         const valorOriginal = enfesto?.corId ?? enfesto?.cor;
         if (!valorOriginal) {
+            const corIdDoPrimeiroRolo = enfesto?.rolos?.[0]?.rolo?.tecido?.cor?.id;
+            if (corIdDoPrimeiroRolo && coresMap.has(corIdDoPrimeiroRolo)) {
+                console.warn("[LoteProducao] Fallback de cor aplicado (enfesto sem cor/corId)", {
+                    enfestoId: enfesto?.id,
+                    corFallbackId: corIdDoPrimeiroRolo
+                });
+                return corIdDoPrimeiroRolo;
+            }
+
+            console.warn("[LoteProducao] Não foi possível resolver cor do enfesto (sem cor/corId e sem rolo)", {
+                enfestoId: enfesto?.id
+            });
             return undefined;
         }
 
@@ -418,7 +441,27 @@ function formatarLoteResponse(lote: any) {
         }
 
         const valorNormalizado = String(valorOriginal).trim().toLowerCase();
-        return corNomeParaId.get(valorNormalizado);
+        const corPorNome = corNomeParaId.get(valorNormalizado);
+        if (corPorNome) {
+            return corPorNome;
+        }
+
+        const corIdDoPrimeiroRolo = enfesto?.rolos?.[0]?.rolo?.tecido?.cor?.id;
+        if (corIdDoPrimeiroRolo && coresMap.has(corIdDoPrimeiroRolo)) {
+            console.warn("[LoteProducao] Fallback de cor aplicado (nome/id de cor não mapeado)", {
+                enfestoId: enfesto?.id,
+                valorOriginal,
+                corFallbackId: corIdDoPrimeiroRolo
+            });
+            return corIdDoPrimeiroRolo;
+        }
+
+        console.warn("[LoteProducao] Não foi possível resolver cor do enfesto", {
+            enfestoId: enfesto?.id,
+            valorOriginal
+        });
+
+        return undefined;
     };
 
     const qtdFolhasPorCor = new Map<string, number>();
@@ -485,6 +528,13 @@ function formatarLoteResponse(lote: any) {
         corId: grupoCor.cor?.id,
         nome: grupoCor.cor?.nome,
         qtdFolhas: qtdFolhasPorCor.get(grupoCor.cor?.id ?? "") ?? 0,
+        valorTecido: Array.from(
+            new Map<string, number>(
+                grupoCor.rolos
+                    .filter((rolo: any) => rolo?.tecido?.id)
+                    .map((rolo: any) => [rolo.tecido.id, Number(rolo.tecido?.valorPorKg ?? 0)])
+            ).values()
+        ).reduce((acumulador: number, valor: number) => acumulador + valor, 0),
         codigoHex: grupoCor.cor?.codigoHex,
         rolos: grupoCor.rolos.map((rolo: any) => ({
             id: rolo.id,
@@ -504,7 +554,7 @@ function formatarLoteResponse(lote: any) {
             rendimentoMetroKg: Number(lote.tecido?.rendimentoMetroKg),
             larguraMetros: Number(lote.tecido?.larguraMetros),
             gramatura: Number(lote.tecido?.gramatura),
-            valorPorKg: Number(lote.tecido?.valorPorKg),
+            valorPorKg: valorPorKgTotal,
             pesoTotal,
             cores
         }
@@ -702,7 +752,7 @@ class ListByIdLoteProducaoService {
 }
 
 class UpdateLoteProducaoService {
-    async execute(id: string, { loteId, codigoLote, responsavelId, status, observacao, qtdFolhas, enfestos, usuarioId }: IUpdateLoteProducaoRequest) {
+    async execute(id: string, { loteId, codigoLote, responsavelId, status, observacao, enfestos, usuarioId }: IUpdateLoteProducaoRequest) {
         return prismaClient.$transaction(async (tx) => {
             const lote = await tx.loteProducao.findUnique({
                 where: { id }
@@ -726,38 +776,55 @@ class UpdateLoteProducaoService {
                 const rolosIdsEntrada = [...new Set(rolosProducaoEntrada.map(rolo => rolo.estoqueRoloId))];
                 await validarRolosPertencemAoLote(tx, id, rolosIdsEntrada);
 
-                for (const roloInfo of rolosProducaoEntrada) {
-                    const rolo = await tx.estoqueRolo.findUnique({
-                        where: { id: roloInfo.estoqueRoloId }
-                    });
+                const rolosExistentes = await tx.estoqueRolo.findMany({
+                    where: {
+                        id: {
+                            in: rolosIdsEntrada
+                        }
+                    }
+                });
 
+                if (rolosExistentes.length !== rolosIdsEntrada.length) {
+                    throw new Error("Um ou mais rolos não encontrados.");
+                }
+
+                const rolosPorId = new Map<string, { pesoAtualKg: number }>(
+                    rolosExistentes.map((rolo: any) => [rolo.id, { pesoAtualKg: Number(rolo.pesoAtualKg) }])
+                );
+
+                for (const roloInfo of rolosProducaoEntrada) {
+                    const rolo = rolosPorId.get(roloInfo.estoqueRoloId);
                     if (!rolo) {
                         throw new Error(`Rolo ${roloInfo.estoqueRoloId} não encontrado.`);
                     }
 
-                    if (Number(rolo.pesoAtualKg) < roloInfo.pesoReservado) {
+                    if (rolo.pesoAtualKg < roloInfo.pesoReservado) {
                         throw new Error(`Rolo ${roloInfo.estoqueRoloId} não tem peso suficiente. Disponível: ${rolo.pesoAtualKg}kg, Solicitado: ${roloInfo.pesoReservado}kg`);
                     }
 
-                    const novoPeso = Number(rolo.pesoAtualKg) - roloInfo.pesoReservado;
-
-                    await tx.movimentacaoEstoque.create({
-                        data: {
-                            estoqueRoloId: roloInfo.estoqueRoloId,
-                            usuarioId,
-                            tipoMovimentacao: "saida",
-                            pesoMovimentado: roloInfo.pesoReservado
-                        }
-                    });
-
-                    await tx.estoqueRolo.update({
-                        where: { id: roloInfo.estoqueRoloId },
-                        data: {
-                            pesoAtualKg: novoPeso <= 0 ? 0 : novoPeso,
-                            situacao: novoPeso <= 0 ? "esgotado" : "em_uso"
-                        }
-                    });
+                    rolo.pesoAtualKg -= roloInfo.pesoReservado;
                 }
+
+                await tx.movimentacaoEstoque.createMany({
+                    data: rolosProducaoEntrada.map(roloInfo => ({
+                        estoqueRoloId: roloInfo.estoqueRoloId,
+                        usuarioId,
+                        tipoMovimentacao: "saida",
+                        pesoMovimentado: roloInfo.pesoReservado
+                    }))
+                });
+
+                await Promise.all(
+                    Array.from(rolosPorId.entries()).map(([estoqueRoloId, rolo]) =>
+                        tx.estoqueRolo.update({
+                            where: { id: estoqueRoloId },
+                            data: {
+                                pesoAtualKg: rolo.pesoAtualKg <= 0 ? 0 : rolo.pesoAtualKg,
+                                situacao: rolo.pesoAtualKg <= 0 ? "esgotado" : "em_uso"
+                            }
+                        })
+                    )
+                );
             }
 
             if (codigoLote && codigoLote !== lote.codigoLote) {
@@ -778,7 +845,7 @@ class UpdateLoteProducaoService {
                 }
             }
 
-            const itemsNormalizados = consolidarItemsNormalizados(normalizarItemsEntrada(enfestos, qtdFolhas));
+            const itemsNormalizados = consolidarItemsNormalizados(normalizarItemsEntrada(enfestos));
             const itemsComQuantidadePositiva = filtrarItensComQuantidadePositiva(itemsNormalizados);
 
             if (enfestos !== undefined) {
@@ -799,6 +866,7 @@ class UpdateLoteProducaoService {
 
                 const itemExistentePorChave = new Map<string, string>();
                 const chavesPorItemId = new Map<string, string[]>();
+                const itemIdsParaRemover = new Set<string>();
 
                 for (const itemExistente of itensExistentes) {
                     const chavesDoItem: string[] = [];
@@ -830,9 +898,7 @@ class UpdateLoteProducaoService {
 
                         const itemIdExistente = itemExistentePorChave.get(chave);
                         if (itemIdExistente) {
-                            await tx.loteItem.delete({
-                                where: { id: itemIdExistente }
-                            });
+                            itemIdsParaRemover.add(itemIdExistente);
 
                             const chavesAntigas = chavesPorItemId.get(itemIdExistente) ?? [];
                             for (const chaveAntiga of chavesAntigas) {
@@ -842,6 +908,16 @@ class UpdateLoteProducaoService {
                         }
                     }
                 }
+
+                if (itemIdsParaRemover.size > 0) {
+                    await tx.loteItem.deleteMany({
+                        where: {
+                            id: {
+                                in: Array.from(itemIdsParaRemover)
+                            }
+                        }
+                    });
+                }
             }
 
             if (itemsComQuantidadePositiva.length > 0) {
@@ -849,8 +925,10 @@ class UpdateLoteProducaoService {
                     throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
                 }
 
-                await validarProdutosETamanhos(tx, itemsComQuantidadePositiva);
-                const nomesCorPorId = await obterNomesCorPorId(tx, itemsComQuantidadePositiva);
+                const [, nomesCorPorId] = await Promise.all([
+                    validarProdutosETamanhos(tx, itemsComQuantidadePositiva),
+                    obterNomesCorPorId(tx, itemsComQuantidadePositiva)
+                ]);
 
                 const rolosReservadosPorEnfesto = extrairRolosReservados(itemsComQuantidadePositiva);
                 const { rolosAgrupados } = await validarRolos(tx, rolosReservadosPorEnfesto);
@@ -924,8 +1002,10 @@ class AddLoteItemsService {
                 throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
             }
 
-            await validarProdutosETamanhos(tx, itemsNormalizados);
-            const nomesCorPorId = await obterNomesCorPorId(tx, itemsNormalizados);
+            const [, nomesCorPorId] = await Promise.all([
+                validarProdutosETamanhos(tx, itemsNormalizados),
+                obterNomesCorPorId(tx, itemsNormalizados)
+            ]);
 
             const itensExistentes = await tx.loteItem.findMany({
                 where: { loteProducaoId: id },
@@ -940,6 +1020,7 @@ class AddLoteItemsService {
 
             const itemExistentePorChave = new Map<string, string>();
             const chavesPorItemId = new Map<string, string[]>();
+            const itemIdsParaRemover = new Set<string>();
 
             for (const itemExistente of itensExistentes) {
                 const chavesDoItem: string[] = [];
@@ -976,9 +1057,7 @@ class AddLoteItemsService {
 
                     const itemIdExistente = itemExistentePorChave.get(chave);
                     if (itemIdExistente) {
-                        await tx.loteItem.delete({
-                            where: { id: itemIdExistente }
-                        });
+                        itemIdsParaRemover.add(itemIdExistente);
 
                         const chavesAntigas = chavesPorItemId.get(itemIdExistente) ?? [];
                         for (const chaveAntiga of chavesAntigas) {
@@ -987,7 +1066,19 @@ class AddLoteItemsService {
                         chavesPorItemId.delete(itemIdExistente);
                     }
                 }
+            }
 
+            if (itemIdsParaRemover.size > 0) {
+                await tx.loteItem.deleteMany({
+                    where: {
+                        id: {
+                            in: Array.from(itemIdsParaRemover)
+                        }
+                    }
+                });
+            }
+
+            for (const item of itemsNormalizados) {
                 const loteItemCriado = await tx.loteItem.create({
                     data: {
                         loteProducaoId: id,
