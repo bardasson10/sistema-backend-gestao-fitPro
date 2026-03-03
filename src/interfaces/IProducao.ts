@@ -94,10 +94,15 @@ export interface ILoteProducaoResponse {
 }
 
 // Direcionamento
-export interface ICreateDirecionamentoRequest {
-    loteProducaoId: string;
+export interface IDirecionamentoInput {
     faccaoId: string;
     tipoServico: "costura" | "estampa" | "tingimento" | "acabamento" | "corte" | "outro";
+    quantidade: number;
+}
+
+export interface ICreateDirecionamentoRequest {
+    loteProducaoId: string;
+    direcionamentos: IDirecionamentoInput[];
 }
 
 export interface IUpdateDirecionamentoRequest {

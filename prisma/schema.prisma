@@ -318,6 +318,7 @@ model Direcionamento {
   loteProducaoId      String   @map("lote_producao_id")
   faccaoId            String   @map("faccao_id")
   tipoServico         String   @map("tipo_servico")
+  quantidade          Int      @default(0)
   status              String   @default("enviado")
   dataSaida           DateTime? @map("data_saida") @db.Date
   dataPrevisaoRetorno DateTime? @map("data_previsao_retorno") @db.Date

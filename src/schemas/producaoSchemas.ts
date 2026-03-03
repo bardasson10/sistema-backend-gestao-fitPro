@@ -89,8 +89,11 @@ export const addLoteItemsSchema = z.object({
 export const createDirecionamentoSchema = z.object({
     body: z.object({
         loteProducaoId: z.uuid("ID de lote inválido"),
-        faccaoId: z.uuid("ID de facção inválido"),
-        tipoServico: z.enum(["costura", "estampa", "tingimento", "acabamento", "corte", "outro"]),
+        direcionamentos: z.array(z.object({
+            faccaoId: z.uuid("ID de facção inválido"),
+            tipoServico: z.enum(["costura", "estampa", "tingimento", "acabamento", "corte", "outro"]),
+            quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
+        })).min(1, "Informe ao menos um direcionamento."),
     }),
 });
 

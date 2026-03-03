@@ -3,32 +3,70 @@ import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } fro
 import prismaClient from "../../prisma";
 
 class CreateDirecionamentoService {
-    async execute({ loteProducaoId, faccaoId, tipoServico }: ICreateDirecionamentoRequest) {
+    async execute({ loteProducaoId, direcionamentos }: ICreateDirecionamentoRequest) {
+        if (!direcionamentos?.length) {
+            throw new Error("Informe ao menos um direcionamento.");
+        }
+
         // Verificar se lote existe
         const lote = await prismaClient.loteProducao.findUnique({
-            where: { id: loteProducaoId }
+            where: { id: loteProducaoId },
+            select: {
+                id: true,
+                status: true,
+                items: {
+                    select: {
+                        quantidadePlanejada: true
+                    }
+                },
+                _count: {
+                    select: {
+                        items: true
+                    }
+                }
+            }
         });
 
         if (!lote) {
             throw new Error("Lote não encontrado.");
         }
 
-        // Verificar se facção existe
-        const faccao = await prismaClient.faccao.findUnique({
-            where: { id: faccaoId }
+        if (lote._count.items === 0) {
+            throw new Error("Não é possível direcionar lote sem itens na grade.");
+        }
+
+        const quantidadeTotalLote = lote.items.reduce((total, item) => total + item.quantidadePlanejada, 0);
+        const quantidadeTotalDirecionada = direcionamentos.reduce((total, direcionamento) => total + direcionamento.quantidade, 0);
+
+        if (quantidadeTotalDirecionada !== quantidadeTotalLote) {
+            throw new Error(`Quantidade total direcionada (${quantidadeTotalDirecionada}) deve ser igual à quantidade necessária do lote (${quantidadeTotalLote}).`);
+        }
+
+        const faccoesIds = [...new Set(direcionamentos.map((direcionamento) => direcionamento.faccaoId))];
+
+        const faccoes = await prismaClient.faccao.findMany({
+            where: {
+                id: {
+                    in: faccoesIds
+                }
+            },
+            select: {
+                id: true,
+                status: true
+            }
         });
 
-        if (!faccao) {
-            throw new Error("Facção não encontrada.");
+        if (faccoes.length !== faccoesIds.length) {
+            throw new Error("Uma ou mais facções não foram encontradas.");
         }
 
-        // Verificar status da facção
-        if (faccao.status !== "ativo") {
-            throw new Error("Facção inativa. Não é possível enviar direcionamentos.");
+        const faccaoInativa = faccoes.find((faccao) => faccao.status !== "ativo");
+        if (faccaoInativa) {
+            throw new Error("Uma ou mais facções estão inativas. Não é possível enviar direcionamentos.");
         }
 
-        // Usar transação para criar direcionamento e atualizar status do lote
-        const direcionamento = await prismaClient.$transaction(async (tx) => {
+        // Usar transação para criar direcionamentos e atualizar status do lote
+        const direcionamentosCriados = await prismaClient.$transaction(async (tx) => {
             // Atualizar status do lote de "planejado" para "em_producao"
             if (lote.status === "planejado") {
                 await tx.loteProducao.update({
@@ -37,37 +75,41 @@ class CreateDirecionamentoService {
                 });
             }
 
-            // Criar direcionamento
-            const novorDirecionamento = await tx.direcionamento.create({
-                data: {
-                    loteProducaoId,
-                    faccaoId,
-                    tipoServico,
-                    dataSaida: new Date(),
-                    dataPrevisaoRetorno: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Exemplo: previsão de retorno em 7 dias
-                    status: "enviado"
-                },
-                include: {
-                    lote: {
-                            include: {
-                                tecido: true,
-                                items: {
-                                    include: {
-                                        produto: true,
-                                        tamanho: true
+            const resultado = await Promise.all(
+                direcionamentos.map((direcionamento) =>
+                    tx.direcionamento.create({
+                        data: {
+                            loteProducaoId,
+                            faccaoId: direcionamento.faccaoId,
+                            tipoServico: direcionamento.tipoServico,
+                            quantidade: direcionamento.quantidade,
+                            dataSaida: new Date(),
+                            dataPrevisaoRetorno: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                            status: "enviado"
+                        },
+                        include: {
+                            lote: {
+                                include: {
+                                    tecido: true,
+                                    items: {
+                                        include: {
+                                            produto: true,
+                                            tamanho: true
+                                        }
                                     }
                                 }
-                            }
-                        },
-                    faccao: true,
-                    conferencias: true
-                }
-            });
+                            },
+                            faccao: true,
+                            conferencias: true
+                        }
+                    })
+                )
+            );
 
-            return novorDirecionamento;
+            return resultado;
         });
 
-        return direcionamento;
+        return direcionamentosCriados;
     }
 }
 

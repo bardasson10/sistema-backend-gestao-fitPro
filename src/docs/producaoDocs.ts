@@ -271,12 +271,12 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         }
     });
 
-    // POST /direcionamentos - Criar direcionamento
+    // POST /direcionamentos - Criar direcionamentos
     registry.registerPath({
         method: 'post',
         path: '/direcionamentos',
         tags: ['Produção'],
-        summary: 'Criar direcionamento',
+        summary: 'Criar direcionamentos',
         request: {
             body: {
                 content: {
@@ -289,7 +289,7 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Direcionamento criado com sucesso'
+                description: 'Direcionamentos criados com sucesso'
             },
             400: {
                 description: 'Erro de validação'
