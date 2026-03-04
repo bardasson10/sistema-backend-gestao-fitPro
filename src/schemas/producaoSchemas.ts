@@ -1,18 +1,36 @@
 import { z } from "zod";
 
-const enfestoComItensProducaoSchema = z.object({
+const enfestoUpdateProducaoSchema = z.object({
     corId: z.uuid("ID de cor inválido"),
-    qtdFolhas: z.number().int().positive("Quantidade de folhas deve ser maior que zero"),
+    qtdFolhas: z.number().int().nonnegative("Quantidade de folhas não pode ser negativa"),
     rolosProducao: z.array(z.object({
         estoqueRoloId: z.uuid("ID de rolo inválido"),
         pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
-    })).min(1, "Informe ao menos um rolo por enfesto."),
+    })).optional(),
     itens: z.array(z.object({
         produtoId: z.uuid("ID de produto inválido"),
         tamanhoId: z.uuid("ID de tamanho inválido"),
         quantidadePlanejada: z.number().int().nonnegative("Quantidade não pode ser negativa"),
-    })).min(1, "Informe ao menos um item por enfesto."),
-}).strict();
+    })).optional(),
+}).superRefine((data, ctx) => {
+    if (data.qtdFolhas > 0) {
+        if (!data.rolosProducao || data.rolosProducao.length === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["rolosProducao"],
+                message: "Informe ao menos um rolo por enfesto."
+            });
+        }
+
+        if (!data.itens || data.itens.length === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["itens"],
+                message: "Informe ao menos um item por enfesto."
+            });
+        }
+    }
+});
 
 const enfestoComItensSchema = z.object({
     corId: z.uuid("ID de cor inválido"),
@@ -70,7 +88,7 @@ export const updateLoteProducaoSchema = z.object({
         responsavelId: z.uuid("ID de responsável inválido").optional(),
         status: z.string().optional(),
         observacao: z.string().optional(),
-        enfestos: z.array(enfestoComItensProducaoSchema).optional(),
+        enfestos: z.array(enfestoUpdateProducaoSchema).optional(),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),

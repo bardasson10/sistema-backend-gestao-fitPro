@@ -183,7 +183,7 @@ function consolidarItemsNormalizados(items: ILoteItemComEnfestosInput[]) {
             continue;
         }
 
-        existente.quantidadePlanejada += item.quantidadePlanejada;
+        existente.quantidadePlanejada = item.quantidadePlanejada;
     }
 
     return Array.from(itensConsolidados.values());
@@ -197,8 +197,8 @@ function ordenarRolosIds(rolos: Array<{ estoqueRoloId: string }>) {
     return [...rolos].map(rolo => rolo.estoqueRoloId).sort();
 }
 
-function criarChaveItemPorCorERolos(produtoId: string, tamanhoId: string, cor: string, rolosIds: string[]) {
-    return `${produtoId}|${tamanhoId}|${String(cor).trim().toLowerCase()}|${rolosIds.join(",")}`;
+function criarChaveItemPorCorERolos(produtoId: string, tamanhoId: string, cor: string, qtdFolhas: number, rolosIds: string[]) {
+    return `${produtoId}|${tamanhoId}|${String(cor).trim().toLowerCase()}|${qtdFolhas}|${rolosIds.join(",")}`;
 }
 
 function extrairRolosProducaoDosEnfestos(enfestos?: IEnfestoComItensProducaoInput[]) {
@@ -218,11 +218,6 @@ function extrairRolosProducaoDosEnfestos(enfestos?: IEnfestoComItensProducaoInpu
         estoqueRoloId,
         pesoReservado
     }));
-}
-
-function calcularQuantidadePlanejadaComFolhas(item: ILoteItemComEnfestosInput) {
-    const totalFolhas = item.enfestos.reduce((acumulador, enfesto) => acumulador + enfesto.qtdFolhas, 0);
-    return item.quantidadePlanejada * totalFolhas;
 }
 
 function agruparRolosPorId(rolosReservados: RoloReservado[]) {
@@ -766,7 +761,8 @@ class UpdateLoteProducaoService {
                 throw new Error("loteId do body deve ser igual ao id da rota.");
             }
 
-            const rolosProducaoEntrada = extrairRolosProducaoDosEnfestos(enfestos);
+            const enfestosComFolhasPositivas = enfestos?.filter(enfesto => enfesto.qtdFolhas > 0);
+            const rolosProducaoEntrada = extrairRolosProducaoDosEnfestos(enfestosComFolhasPositivas);
 
             if (status === "em_producao" && lote.status === "planejado" && rolosProducaoEntrada.length > 0) {
                 if (!usuarioId) {
@@ -845,75 +841,115 @@ class UpdateLoteProducaoService {
                 }
             }
 
-            const itemsNormalizados = consolidarItemsNormalizados(normalizarItemsEntrada(enfestos));
+            const itemsNormalizados = consolidarItemsNormalizados(normalizarItemsEntrada(enfestosComFolhasPositivas));
             const itemsComQuantidadePositiva = filtrarItensComQuantidadePositiva(itemsNormalizados);
 
-            if (enfestos !== undefined) {
-                const nomesCorPorIdTodos = itemsNormalizados.length > 0
-                    ? await obterNomesCorPorId(tx, itemsNormalizados)
-                    : new Map<string, string>();
-
-                const itensExistentes = await tx.loteItem.findMany({
-                    where: { loteProducaoId: id },
-                    include: {
-                        enfestos: {
-                            include: {
-                                rolos: true
-                            }
+            if (enfestos !== undefined && enfestos.length > 0) {
+                const corIdsPayload = [...new Set(enfestos.map(enfesto => enfesto.corId))];
+                const coresPayload = await tx.cor.findMany({
+                    where: {
+                        id: {
+                            in: corIdsPayload
                         }
+                    },
+                    select: {
+                        id: true,
+                        nome: true
                     }
                 });
 
-                const itemExistentePorChave = new Map<string, string>();
-                const chavesPorItemId = new Map<string, string[]>();
-                const itemIdsParaRemover = new Set<string>();
-
-                for (const itemExistente of itensExistentes) {
-                    const chavesDoItem: string[] = [];
-
-                    for (const enfestoExistente of itemExistente.enfestos) {
-                        const chave = criarChaveItemPorCorERolos(
-                            itemExistente.produtoId,
-                            itemExistente.tamanhoId,
-                            enfestoExistente.cor,
-                            ordenarRolosIds(enfestoExistente.rolos)
-                        );
-
-                        itemExistentePorChave.set(chave, itemExistente.id);
-                        chavesDoItem.push(chave);
-                    }
-
-                    chavesPorItemId.set(itemExistente.id, chavesDoItem);
+                if (coresPayload.length !== corIdsPayload.length) {
+                    throw new Error("Uma ou mais cores não foram encontradas.");
                 }
 
-                for (const item of itemsNormalizados) {
-                    for (const enfesto of item.enfestos) {
-                        const nomeCor = nomesCorPorIdTodos.get(enfesto.corId) as string;
-                        const chave = criarChaveItemPorCorERolos(
-                            item.produtoId,
-                            item.tamanhoId,
-                            nomeCor,
-                            ordenarRolosIds(enfesto.rolos)
-                        );
+                const nomeCorPorId = new Map<string, string>(coresPayload.map(cor => [cor.id, cor.nome]));
+                const coresParaAtualizar = [...new Set(corIdsPayload.map(corId => nomeCorPorId.get(corId) as string))];
 
-                        const itemIdExistente = itemExistentePorChave.get(chave);
-                        if (itemIdExistente) {
-                            itemIdsParaRemover.add(itemIdExistente);
+                const corIdsRemocao = [...new Set(enfestos.filter(enfesto => enfesto.qtdFolhas === 0).map(enfesto => enfesto.corId))];
+                const coresParaRemocao = [...new Set(corIdsRemocao.map(corId => nomeCorPorId.get(corId) as string))];
 
-                            const chavesAntigas = chavesPorItemId.get(itemIdExistente) ?? [];
-                            for (const chaveAntiga of chavesAntigas) {
-                                itemExistentePorChave.delete(chaveAntiga);
-                            }
-                            chavesPorItemId.delete(itemIdExistente);
+                if (coresParaRemocao.length > 0) {
+                    const rolosRemocao = enfestos
+                        .filter(enfesto => enfesto.qtdFolhas === 0)
+                        .flatMap(enfesto => enfesto.rolosProducao ?? []);
+
+                    const pesoEstornoPorRolo = new Map<string, number>();
+                    for (const rolo of rolosRemocao) {
+                        const pesoAtual = pesoEstornoPorRolo.get(rolo.estoqueRoloId) ?? 0;
+                        pesoEstornoPorRolo.set(rolo.estoqueRoloId, pesoAtual + rolo.pesoReservado);
+                    }
+
+                    if (pesoEstornoPorRolo.size > 0) {
+                        if (!usuarioId) {
+                            throw new Error("usuarioId é obrigatório para estornar peso ao remover enfestos com qtdFolhas igual a 0.");
                         }
+
+                        const rolosIdsEstorno = Array.from(pesoEstornoPorRolo.keys());
+                        await validarRolosPertencemAoLote(tx, id, rolosIdsEstorno);
+
+                        const rolosEstoque = await tx.estoqueRolo.findMany({
+                            where: {
+                                id: {
+                                    in: rolosIdsEstorno
+                                }
+                            },
+                            select: {
+                                id: true,
+                                pesoAtualKg: true,
+                                pesoInicialKg: true
+                            }
+                        });
+
+                        if (rolosEstoque.length !== rolosIdsEstorno.length) {
+                            throw new Error("Um ou mais rolos para estorno não foram encontrados no estoque.");
+                        }
+
+                        await tx.movimentacaoEstoque.createMany({
+                            data: rolosEstoque.map(rolo => ({
+                                estoqueRoloId: rolo.id,
+                                usuarioId,
+                                tipoMovimentacao: "entrada",
+                                pesoMovimentado: pesoEstornoPorRolo.get(rolo.id) ?? 0
+                            }))
+                        });
+
+                        await Promise.all(
+                            rolosEstoque.map((rolo) => {
+                                const pesoEstorno = pesoEstornoPorRolo.get(rolo.id) ?? 0;
+                                const novoPeso = Number(rolo.pesoAtualKg) + pesoEstorno;
+                                const pesoInicial = Number(rolo.pesoInicialKg);
+
+                                return tx.estoqueRolo.update({
+                                    where: { id: rolo.id },
+                                    data: {
+                                        pesoAtualKg: novoPeso,
+                                        situacao: novoPeso <= 0 ? "esgotado" : (novoPeso < pesoInicial ? "disponivel" : "disponivel")
+                                    }
+                                });
+                            })
+                        );
+
+                        await tx.loteRolo.deleteMany({
+                            where: {
+                                loteProducaoId: id,
+                                estoqueRoloId: {
+                                    in: rolosIdsEstorno
+                                }
+                            }
+                        });
                     }
                 }
 
-                if (itemIdsParaRemover.size > 0) {
+                if (coresParaAtualizar.length > 0) {
                     await tx.loteItem.deleteMany({
                         where: {
-                            id: {
-                                in: Array.from(itemIdsParaRemover)
+                            loteProducaoId: id,
+                            enfestos: {
+                                some: {
+                                    cor: {
+                                        in: coresParaAtualizar
+                                    }
+                                }
                             }
                         }
                     });
@@ -941,7 +977,7 @@ class UpdateLoteProducaoService {
                             loteProducaoId: id,
                             produtoId: item.produtoId,
                             tamanhoId: item.tamanhoId,
-                            quantidadePlanejada: calcularQuantidadePlanejadaComFolhas(item)
+                            quantidadePlanejada: item.quantidadePlanejada
                         }
                     });
 
@@ -1030,6 +1066,7 @@ class AddLoteItemsService {
                         itemExistente.produtoId,
                         itemExistente.tamanhoId,
                         enfestoExistente.cor,
+                        Number(enfestoExistente.qtdFolhas),
                         ordenarRolosIds(enfestoExistente.rolos)
                     );
 
@@ -1052,6 +1089,7 @@ class AddLoteItemsService {
                         item.produtoId,
                         item.tamanhoId,
                         nomeCor,
+                        enfesto.qtdFolhas,
                         ordenarRolosIds(enfesto.rolos)
                     );
 
@@ -1084,7 +1122,7 @@ class AddLoteItemsService {
                         loteProducaoId: id,
                         produtoId: item.produtoId,
                         tamanhoId: item.tamanhoId,
-                        quantidadePlanejada: calcularQuantidadePlanejadaComFolhas(item)
+                            quantidadePlanejada: item.quantidadePlanejada
                     }
                 });
 
