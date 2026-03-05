@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, DeleteLoteProducaoService } from "../../services/producao/LoteProducaoService";
+import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, AddRolosLoteService, DeleteLoteProducaoService } from "../../services/producao/LoteProducaoService";
 
 class CreateLoteProducaoController {
     async handle(req: Request, res: Response) {
@@ -60,6 +60,15 @@ class AddLoteItemsController {
     }
 }
 
+class AddRolosLoteController {
+    async handle(req: Request, res: Response) {
+        const id = req.params.id as string;
+        const { rolos } = req.body;
+        const lote = await new AddRolosLoteService().execute(id, { rolos });
+        return res.json(lote);
+    }
+}
+
 class DeleteLoteProducaoController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string 
@@ -68,4 +77,4 @@ class DeleteLoteProducaoController {
     }
 }
 
-export { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, DeleteLoteProducaoController };
+export { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, DeleteLoteProducaoController };

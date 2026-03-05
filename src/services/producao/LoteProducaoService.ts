@@ -1192,4 +1192,92 @@ class DeleteLoteProducaoService {
     }
 }
 
-export { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, DeleteLoteProducaoService };
+class AddRolosLoteService {
+    async execute(id: string, { rolos }: { rolos: Array<{ estoqueRoloId: string; pesoReservado: number }> }) {
+        const lote = await prismaClient.loteProducao.findUnique({
+            where: { id }
+        });
+
+        if (!lote) {
+            throw new Error("Lote não encontrado.");
+        }
+
+        if (!rolos || rolos.length === 0) {
+            throw new Error("É necessário informar ao menos um rolo.");
+        }
+
+        const rolosAgrupados = agruparRolosIniciais(rolos);
+        const roloIds = rolosAgrupados.map(rolo => rolo.estoqueRoloId);
+        const rolosExistentes = await prismaClient.estoqueRolo.findMany({
+            where: { id: { in: roloIds } }
+        });
+
+        if (rolosExistentes.length !== roloIds.length) {
+            throw new Error("Um ou mais rolos não encontrados.");
+        }
+
+        const rolosPorId = new Map<string, any>(rolosExistentes.map((rolo: any) => [rolo.id, rolo]));
+
+        for (const roloReservado of rolosAgrupados) {
+            const rolo = rolosPorId.get(roloReservado.estoqueRoloId) as any;
+            if (!rolo) {
+                throw new Error(`Rolo ${roloReservado.estoqueRoloId} não encontrado.`);
+            }
+
+            if (Number(rolo.pesoAtualKg) < roloReservado.pesoReservado) {
+                throw new Error(`Rolo ${rolo.id} não tem peso suficiente. Disponível: ${rolo.pesoAtualKg}kg, Solicitado: ${roloReservado.pesoReservado}kg`);
+            }
+        }
+
+        const loteAtualizado = await prismaClient.$transaction(async (tx) => {
+            // Adicionar rolos ao lote
+            await tx.loteRolo.createMany({
+                data: rolosAgrupados.map(rolo => ({
+                    loteProducaoId: id,
+                    estoqueRoloId: rolo.estoqueRoloId,
+                    pesoReservado: rolo.pesoReservado
+                }))
+            });
+
+            // Atualizar peso dos rolos no estoque
+            for (const roloInfo of rolosAgrupados) {
+                const roloExistente = rolosPorId.get(roloInfo.estoqueRoloId) as any;
+                if (!roloExistente) {
+                    continue;
+                }
+
+                const novoPeso = Number(roloExistente.pesoAtualKg) - roloInfo.pesoReservado;
+
+                await tx.movimentacaoEstoque.create({
+                    data: {
+                        estoqueRoloId: roloInfo.estoqueRoloId,
+                        usuarioId: lote.responsavelId,
+                        tipoMovimentacao: "saida",
+                        pesoMovimentado: roloInfo.pesoReservado
+                    }
+                });
+
+                await tx.estoqueRolo.update({
+                    where: { id: roloInfo.estoqueRoloId },
+                    data: {
+                        pesoAtualKg: novoPeso <= 0 ? 0 : novoPeso,
+                        situacao: novoPeso <= 0 ? "esgotado" : "disponivel"
+                    }
+                });
+            }
+
+            return tx.loteProducao.findUnique({
+                where: { id },
+                include: loteInclude
+            });
+        }, INTERACTIVE_TRANSACTION_OPTIONS);
+
+        if (!loteAtualizado) {
+            throw new Error("Erro ao atualizar lote.");
+        }
+
+        return formatarLoteResponse(loteAtualizado);
+    }
+}
+
+export { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, AddRolosLoteService, DeleteLoteProducaoService };

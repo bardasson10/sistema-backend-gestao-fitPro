@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const enfestoUpdateProducaoSchema = z.object({
-    corId: z.uuid("ID de cor inválido"),
+    corId: z.string().uuid("ID de cor inválido").optional().or(z.string().min(1, "Cor é obrigatória")),
     qtdFolhas: z.number().int().nonnegative("Quantidade de folhas não pode ser negativa"),
     rolosProducao: z.array(z.object({
         estoqueRoloId: z.uuid("ID de rolo inválido"),
@@ -33,7 +33,7 @@ const enfestoUpdateProducaoSchema = z.object({
 });
 
 const enfestoComItensSchema = z.object({
-    corId: z.uuid("ID de cor inválido"),
+    corId: z.string().uuid("ID de cor inválido").or(z.string().min(1, "Cor é obrigatória")),
     qtdFolhas: z.number().int().positive("Quantidade de folhas deve ser maior que zero"),
     rolosProducao: z.array(z.object({
         estoqueRoloId: z.uuid("ID de rolo inválido"),
@@ -153,6 +153,18 @@ export const updateConferenciaSchema = z.object({
             qtdRecebida: z.number().int().positive("Quantidade deve ser positiva"),
             qtdDefeito: z.number().int().nonnegative("Defeitos não podem ser negativos").optional(),
         })).optional(),
+    }),
+    params: z.object({
+        id: z.uuid("ID inválido"),
+    }),
+});
+
+export const addRolosLoteSchema = z.object({
+    body: z.object({
+        rolos: z.array(z.object({
+            estoqueRoloId: z.uuid("ID de rolo inválido"),
+            pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
+        })).min(1, "Informe ao menos um rolo."),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),

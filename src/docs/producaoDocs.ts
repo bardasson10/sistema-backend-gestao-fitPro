@@ -5,6 +5,7 @@ import {
     createLoteProducaoSchema,
     updateLoteProducaoSchema,
     addLoteItemsSchema,
+    addRolosLoteSchema,
     createDirecionamentoSchema,
     updateDirecionamentoSchema,
     createConferenciaSchema,
@@ -242,6 +243,35 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         responses: {
             200: {
                 description: 'Items adicionados ao lote'
+            },
+            404: {
+                description: 'Lote de produção não encontrado'
+            }
+        }
+    });
+
+    // POST /lotes-producao/{id}/rolos - Adicionar rolos ao lote
+    registry.registerPath({
+        method: 'post',
+        path: '/lotes-producao/{id}/rolos',
+        tags: ['Produção'],
+        summary: 'Adicionar rolos ao lote de produção',
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: addRolosLoteSchema.shape.body
+                    }
+                }
+            },
+            params: z.object({
+                id: z.uuid()
+            })
+        },
+        security: [{ bearerAuth: [] }],
+        responses: {
+            200: {
+                description: 'Rolos adicionados ao lote'
             },
             404: {
                 description: 'Lote de produção não encontrado'
