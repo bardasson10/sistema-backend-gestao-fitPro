@@ -83,20 +83,64 @@ class ListTipoProdutoTamanhoService {
 }
 
 class DeleteTipoProdutoTamanhoService {
-    async execute(id: string) {
-        const tipoProdutoTamanho = await prismaClient.tipoProdutoTamanho.findUnique({
-            where: { id }
+    async execute({ tipoProdutoId, tamanhos }: { tipoProdutoId: string; tamanhos: Array<{ tamanhoId: string }> }) {
+        const tipoProduto = await prismaClient.tipoProduto.findUnique({
+            where: { id: tipoProdutoId }
         });
 
-        if (!tipoProdutoTamanho) {
-            throw new Error("Associação não encontrada.");
+        if (!tipoProduto) {
+            throw new Error("Tipo de produto não encontrado.");
         }
 
-        await prismaClient.tipoProdutoTamanho.delete({
-            where: { id }
-        });
+        const resultados = [];
+        const erros = [];
 
-        return { message: "Associação removida com sucesso." };
+        // Evita processamento duplicado quando o mesmo tamanho vem repetido no payload.
+        const tamanhoIdsUnicos = [...new Set(tamanhos.map((item) => item.tamanhoId))];
+
+        for (const tamanhoId of tamanhoIdsUnicos) {
+            try {
+                const tamanho = await prismaClient.tamanho.findUnique({
+                    where: { id: tamanhoId }
+                });
+
+                if (!tamanho) {
+                    erros.push(`Tamanho ${tamanhoId} não encontrado.`);
+                    continue;
+                }
+
+                const associacao = await prismaClient.tipoProdutoTamanho.findFirst({
+                    where: {
+                        tipoProdutoId,
+                        tamanhoId
+                    },
+                    include: {
+                        tipo: true,
+                        tamanho: true
+                    }
+                });
+
+                if (!associacao) {
+                    erros.push(`Tamanho ${tamanho.nome} não está associado a este tipo de produto.`);
+                    continue;
+                }
+
+                await prismaClient.tipoProdutoTamanho.delete({
+                    where: { id: associacao.id }
+                });
+
+                resultados.push(associacao);
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                erros.push(`Erro ao processar tamanho ${tamanhoId}: ${errorMessage}`);
+            }
+        }
+
+        return {
+            message: `${resultados.length} tamanho(s) desassociado(s) com sucesso.`,
+            removidos: resultados,
+            erros: erros.length > 0 ? erros : undefined
+        };
     }
 }
 

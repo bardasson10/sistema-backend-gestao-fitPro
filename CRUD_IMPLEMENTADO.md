@@ -144,7 +144,7 @@ DELETE /produtos/:id
 
 POST   /tipos-produto-tamanho
 GET    /tipos-produto/:tipoProdutoId/tamanhos
-DELETE /tipos-produto-tamanho/:id
+DELETE /tipos-produto-tamanho/:idProduto
 ```
 
 **Lógica de Negócio**:

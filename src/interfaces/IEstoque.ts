@@ -1,9 +1,13 @@
 // Estoque Rolo
+export interface ICreateEstoqueRoloItemRequest {
+    pesoInicialKg: number;
+}
+
 export interface ICreateEstoqueRoloRequest {
     tecidoId: string;
-    codigoBarraRolo?: string;
-    pesoInicialKg: number;
-    pesoAtualKg: number;
+    prefixo: string;
+    dataLote: string;
+    rolos: ICreateEstoqueRoloItemRequest[];
     situacao?: string;
     usuarioId: string; // ID do usuário que está criando o rolo (para movimentação automática)
 }

@@ -7,6 +7,7 @@ import {
     createProdutoSchema,
     updateProdutoSchema,
     createTipoProdutoTamanhoSchema,
+    deleteTipoProdutoTamanhoSchema,
 } from '../schemas/produtoSchemas';
 import { z } from 'zod';
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
@@ -406,24 +407,31 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         }
     });
 
-    // DELETE /tipos-produto-tamanho/{id} - Remover associação
+    // DELETE /tipos-produto-tamanho/{idProduto} - Remover associação
     registry.registerPath({
         method: 'delete',
-        path: '/tipos-produto-tamanho/{id}',
+        path: '/tipos-produto-tamanho/{idProduto}',
         tags: ['Produtos'],
-        summary: 'Remover associação tipo de produto e tamanho (admin)',
+        summary: 'Desassociar tamanhos de um tipo de produto (admin)',
         security: [{ bearerAuth: [] }],
         request: {
             params: z.object({
-                id: z.uuid()
-            })
+                idProduto: z.uuid()
+            }),
+            body: {
+                content: {
+                    'application/json': {
+                        schema: deleteTipoProdutoTamanhoSchema.shape.body
+                    }
+                }
+            }
         },
         responses: {
             200: {
-                description: 'Associação removida'
+                description: 'Desassociação concluída'
             },
             404: {
-                description: 'Associação não encontrada'
+                description: 'Tipo de produto ou associação não encontrada'
             }
         }
     });

@@ -22,8 +22,14 @@ class ListTipoProdutoTamanhoController {
 
 class DeleteTipoProdutoTamanhoController {
     async handle(req: Request, res: Response) {
-        const id = req.params.id as string 
-        const result = await new DeleteTipoProdutoTamanhoService().execute(id);
+        const idProduto = req.params.idProduto as string;
+        const { tamanhos } = req.body;
+
+        const result = await new DeleteTipoProdutoTamanhoService().execute({
+            tipoProdutoId: idProduto,
+            tamanhos
+        });
+
         return res.json(result);
     }
 }

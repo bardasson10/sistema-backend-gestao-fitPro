@@ -82,16 +82,20 @@ curl -X POST http://localhost:3333/tecidos \
   }'
 ```
 
-### 8. Criar Rolo em Estoque
+### 8. Criar Rolos em Estoque (Lote)
 ```bash
 curl -X POST http://localhost:3333/estoque-rolos \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "tecidoId":"uuid-tecido",
-    "codigoBarraRolo":"001-ALG-2026",
-    "pesoInicialKg":100.50,
-    "pesoAtualKg":100.50,
+    "prefixo":"SPP",
+    "dataLote":"2026-03-11",
+    "rolos":[
+      {"pesoInicialKg":25.50},
+      {"pesoInicialKg":28.20},
+      {"pesoInicialKg":24.00}
+    ],
     "situacao":"disponivel"
   }'
 ```

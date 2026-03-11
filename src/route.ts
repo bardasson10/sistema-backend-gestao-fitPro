@@ -17,7 +17,7 @@ import { CreateTipoProdutoController, ListAllTipoProdutoController, ListByIdTipo
 import { CreateTamanhoController, ListAllTamanhoController, ListByIdTamanhoController, UpdateTamanhoController, DeleteTamanhoController } from "./controllers/produto/TamanhoController";
 import { CreateProdutoController, ListAllProdutoController, ListByIdProdutoController, UpdateProdutoController, DeleteProdutoController } from "./controllers/produto/ProdutoController";
 import { CreateTipoProdutoTamanhoController, ListTipoProdutoTamanhoController, DeleteTipoProdutoTamanhoController } from "./controllers/produto/TipoProdutoTamanhoController";
-import { createTipoProdutoSchema, updateTipoProdutoSchema, createTamanhoSchema, updateTamanhoSchema, createProdutoSchema, updateProdutoSchema, createTipoProdutoTamanhoSchema } from "./schemas/produtoSchemas";
+import { createTipoProdutoSchema, updateTipoProdutoSchema, createTamanhoSchema, updateTamanhoSchema, createProdutoSchema, updateProdutoSchema, createTipoProdutoTamanhoSchema, deleteTipoProdutoTamanhoSchema } from "./schemas/produtoSchemas";
 
 // Material Controllers
 import { CreateFornecedorController, ListAllFornecedorController, ListByIdFornecedorController, UpdateFornecedorController, DeleteFornecedorController } from "./controllers/material/FornecedorController";
@@ -73,7 +73,7 @@ router.delete("/produtos/:id", isAuthenticated, isAdmin, new DeleteProdutoContro
 // ==================== TIPO PRODUTO TAMANHO ====================
 router.post("/tipos-produto-tamanho", isAuthenticated, validateSchema(createTipoProdutoTamanhoSchema), new CreateTipoProdutoTamanhoController().handle);
 router.get("/tipos-produto/:tipoProdutoId/tamanhos", isAuthenticated, new ListTipoProdutoTamanhoController().handle);
-router.delete("/tipos-produto-tamanho/:id", isAuthenticated, isAdmin, new DeleteTipoProdutoTamanhoController().handle);
+router.delete("/tipos-produto-tamanho/:idProduto", isAuthenticated, isAdmin, validateSchema(deleteTipoProdutoTamanhoSchema), new DeleteTipoProdutoTamanhoController().handle);
 
 // ==================== FORNECEDORES ====================
 router.post("/fornecedores", isAuthenticated, validateSchema(createFornecedorSchema), new CreateFornecedorController().handle);

@@ -277,7 +277,20 @@ Authorization: Bearer <token>
 
 Retorna todos os tamanhos associados a um tipo de produto.
 
-### DELETE /tipos-produto-tamanho/:id
+### DELETE /tipos-produto-tamanho/:idProduto
+```http
+DELETE /tipos-produto-tamanho/uuid-tipo
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "tamanhos": [
+    {
+      "tamanhoId": "uuid-tamanho"
+    }
+  ]
+}
+```
 
 ---
 
@@ -378,7 +391,7 @@ Authorization: Bearer <token>
 
 ## 📦 Estoque de Rolos
 
-### POST /estoque-rolos - Criar Rolo em Estoque
+### POST /estoque-rolos - Criar Rolos em Estoque (Lote)
 ```http
 POST /estoque-rolos
 Authorization: Bearer <token>
@@ -386,9 +399,13 @@ Content-Type: application/json
 
 {
   "tecidoId": "uuid-tecido",
-  "codigoBarraRolo": "001-ABC-2026",
-  "pesoInicialKg": 100.50,
-  "pesoAtualKg": 100.50,
+  "prefixo": "SPP",
+  "dataLote": "2026-03-11",
+  "rolos": [
+    { "pesoInicialKg": 25.50 },
+    { "pesoInicialKg": 28.20 },
+    { "pesoInicialKg": 24.00 }
+  ],
   "situacao": "disponivel"
 }
 ```
@@ -396,20 +413,33 @@ Content-Type: application/json
 **Resposta (201):**
 ```json
 {
-  "id": "uuid",
-  "tecidoId": "uuid-tecido",
-  "codigoBarraRolo": "001-ABC-2026",
-  "pesoInicialKg": 100.50,
-  "pesoAtualKg": 100.50,
-  "situacao": "disponivel",
-  "tecido": {
-    "id": "uuid-tecido",
-    "nome": "Algodão 30/1",
-    "fornecedor": { ... },
-    "cor": { ... }
-  },
-  "movimentacoes": [],
-  "createdAt": "2026-02-03T10:00:00Z"
+  "message": "3 rolo(s) criado(s) com sucesso.",
+  "rolos": [
+    {
+      "id": "uuid-1",
+      "tecidoId": "uuid-tecido",
+      "codigoBarraRolo": "SPP-110326-001",
+      "pesoInicialKg": 25.50,
+      "pesoAtualKg": 25.50,
+      "situacao": "disponivel"
+    },
+    {
+      "id": "uuid-2",
+      "tecidoId": "uuid-tecido",
+      "codigoBarraRolo": "SPP-110326-002",
+      "pesoInicialKg": 28.20,
+      "pesoAtualKg": 28.20,
+      "situacao": "disponivel"
+    },
+    {
+      "id": "uuid-3",
+      "tecidoId": "uuid-tecido",
+      "codigoBarraRolo": "SPP-110326-003",
+      "pesoInicialKg": 24.00,
+      "pesoAtualKg": 24.00,
+      "situacao": "disponivel"
+    }
+  ]
 }
 ```
 
@@ -896,7 +926,7 @@ Authorization: Bearer <token>
    POST /tecidos { fornecedorId, corId, nome, ... }
 
 8. Criar Estoque de Rolo
-   POST /estoque-rolos { tecidoId, pesoInicialKg, ... }
+  POST /estoque-rolos { tecidoId, prefixo, dataLote, rolos: [{ pesoInicialKg }], ... }
 
 9. Registrar Movimentação (saída para produção)
    POST /movimentacoes-estoque { estoqueRoloId, tipoMovimentacao: "saida", ... }

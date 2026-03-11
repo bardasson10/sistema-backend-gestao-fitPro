@@ -67,3 +67,16 @@ export const createTipoProdutoTamanhoSchema = z.object({
         ).min(1, "Informe ao menos um tamanho"),
     }),
 });
+
+export const deleteTipoProdutoTamanhoSchema = z.object({
+    params: z.object({
+        idProduto: z.uuid("ID de tipo inválido"),
+    }),
+    body: z.object({
+        tamanhos: z.array(
+            z.object({
+                tamanhoId: z.uuid("ID de tamanho inválido"),
+            })
+        ).min(1, "Informe ao menos um tamanho"),
+    }),
+});

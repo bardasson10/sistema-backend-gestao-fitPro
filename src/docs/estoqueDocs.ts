@@ -10,12 +10,12 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 extendZodWithOpenApi(z);
 
 export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
-    // POST /estoque-rolos - Criar rolo de estoque
+    // POST /estoque-rolos - Criar rolos de estoque em lote
     registry.registerPath({
         method: 'post',
         path: '/estoque-rolos',
         tags: ['Estoque'],
-        summary: 'Criar rolo de estoque',
+        summary: 'Criar rolos de estoque em lote',
         request: {
             body: {
                 content: {
@@ -27,8 +27,8 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         },
         security: [{ bearerAuth: [] }],
         responses: {
-            200: {
-                description: 'Rolo de estoque criado com sucesso'
+            201: {
+                description: 'Rolos de estoque criados com sucesso'
             },
             400: {
                 description: 'Erro de validação'

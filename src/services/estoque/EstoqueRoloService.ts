@@ -2,8 +2,40 @@ import { ICreateEstoqueRoloRequest, IUpdateEstoqueRoloRequest } from "../../inte
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
+function formatarDataLoteParaCodigo(dataLote: string): string {
+    const match = dataLote.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (!match) {
+        throw new Error("Data do lote deve estar no formato YYYY-MM-DD.");
+    }
+
+    const ano = match[1];
+    const mes = match[2];
+    const dia = match[3];
+
+    if (!ano || !mes || !dia) {
+        throw new Error("Data do lote inválida.");
+    }
+
+    const anoNumero = Number(ano);
+    const mesNumero = Number(mes);
+    const diaNumero = Number(dia);
+
+    const dataValidacao = new Date(Date.UTC(anoNumero, mesNumero - 1, diaNumero));
+
+    if (
+        dataValidacao.getUTCFullYear() !== anoNumero
+        || dataValidacao.getUTCMonth() + 1 !== mesNumero
+        || dataValidacao.getUTCDate() !== diaNumero
+    ) {
+        throw new Error("Data do lote inválida.");
+    }
+
+    return `${dia}${mes}${ano.slice(-2)}`;
+}
+
 class CreateEstoqueRoloService {
-    async execute({ tecidoId, codigoBarraRolo, pesoInicialKg, pesoAtualKg, situacao, usuarioId }: ICreateEstoqueRoloRequest) {
+    async execute({ tecidoId, prefixo, dataLote, rolos, situacao, usuarioId }: ICreateEstoqueRoloRequest) {
         return prismaClient.$transaction(async (tx) => {
             // Verificar se tecido existe
             const tecido = await tx.tecido.findUnique({
@@ -14,45 +46,73 @@ class CreateEstoqueRoloService {
                 throw new Error("Tecido não encontrado.");
             }
 
-            // Verificar se código de barra é único (se fornecido)
-            if (codigoBarraRolo) {
-                const roloComCodigo = await tx.estoqueRolo.findUnique({
-                    where: { codigoBarraRolo }
+            const prefixoFormatado = prefixo.trim().toUpperCase();
+            const dataLoteCodigo = formatarDataLoteParaCodigo(dataLote);
+            const baseCodigo = `${prefixoFormatado}-${dataLoteCodigo}`;
+
+            const codigosExistentes = await tx.estoqueRolo.findMany({
+                where: {
+                    codigoBarraRolo: {
+                        startsWith: `${baseCodigo}-`
+                    }
+                },
+                select: {
+                    codigoBarraRolo: true
+                }
+            });
+
+            const maiorSequenciaExistente = codigosExistentes.reduce((maior, item) => {
+                if (!item.codigoBarraRolo) {
+                    return maior;
+                }
+
+                const partesCodigo = item.codigoBarraRolo.split("-");
+                const sufixo = partesCodigo[partesCodigo.length - 1];
+                const sequencia = Number(sufixo);
+
+                if (Number.isInteger(sequencia)) {
+                    return Math.max(maior, sequencia);
+                }
+
+                return maior;
+            }, 0);
+
+            const idsCriados: string[] = [];
+
+            for (const [index, item] of rolos.entries()) {
+                const sequenciaAtual = maiorSequenciaExistente + index + 1;
+                const codigoBarraRolo = `${baseCodigo}-${String(sequenciaAtual).padStart(3, "0")}`;
+                const pesoInicialKg = Number(item.pesoInicialKg.toFixed(3));
+
+                const rolo = await tx.estoqueRolo.create({
+                    data: {
+                        tecidoId,
+                        codigoBarraRolo,
+                        pesoInicialKg,
+                        // No cadastro inicial, o peso atual é igual ao peso inicial.
+                        pesoAtualKg: pesoInicialKg,
+                        situacao: situacao || "disponivel"
+                    }
                 });
 
-                if (roloComCodigo) {
-                    throw new Error("Já existe um rolo com este código de barra.");
-                }
+                await tx.movimentacaoEstoque.create({
+                    data: {
+                        estoqueRoloId: rolo.id,
+                        usuarioId,
+                        tipoMovimentacao: "entrada",
+                        pesoMovimentado: pesoInicialKg
+                    }
+                });
+
+                idsCriados.push(rolo.id);
             }
 
-            // Validar pesos
-            if (pesoAtualKg > pesoInicialKg) {
-                throw new Error("Peso atual não pode ser maior que o peso inicial.");
-            }
-
-            const rolo = await tx.estoqueRolo.create({
-                data: {
-                    tecidoId,
-                    codigoBarraRolo,
-                    pesoInicialKg,
-                    pesoAtualKg,
-                    situacao: situacao || "disponivel"
-                }
-            });
-
-            // Registrar movimentação automática de ENTRADA
-            await tx.movimentacaoEstoque.create({
-                data: {
-                    estoqueRoloId: rolo.id,
-                    usuarioId,
-                    tipoMovimentacao: "entrada",
-                    pesoMovimentado: pesoInicialKg
-                }
-            });
-
-            // Re-buscar o rolo com todas as relações
-            const roloCompleto = await tx.estoqueRolo.findUnique({
-                where: { id: rolo.id },
+            const rolosCriados = await tx.estoqueRolo.findMany({
+                where: {
+                    id: {
+                        in: idsCriados
+                    }
+                },
                 include: {
                     tecido: {
                         include: {
@@ -78,7 +138,15 @@ class CreateEstoqueRoloService {
                 }
             });
 
-            return roloCompleto;
+            const rolosPorId = new Map(rolosCriados.map((rolo) => [rolo.id, rolo]));
+            const rolosOrdenados = idsCriados
+                .map((id) => rolosPorId.get(id))
+                .filter((rolo): rolo is NonNullable<typeof rolo> => rolo !== undefined);
+
+            return {
+                message: `${rolosOrdenados.length} rolo(s) criado(s) com sucesso.`,
+                rolos: rolosOrdenados
+            };
         });
     }
 }
