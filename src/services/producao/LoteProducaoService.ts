@@ -1192,36 +1192,86 @@ class AddLoteItemsService {
 
 class DeleteLoteProducaoService {
     async execute(id: string) {
-        const lote = await prismaClient.loteProducao.findUnique({
-            where: { id },
-            include: {
-                items: true,
-                rolos: true,
-                direcionamentos: true
+        return prismaClient.$transaction(async (tx) => {
+            const lote = await tx.loteProducao.findUnique({
+                where: { id },
+                include: {
+                    rolos: true,
+                    direcionamentos: true
+                }
+            });
+
+            if (!lote) {
+                throw new Error("Lote não encontrado.");
             }
-        });
 
-        if (!lote) {
-            throw new Error("Lote não encontrado.");
-        }
+            if (lote.direcionamentos.length > 0) {
+                throw new Error("Não é possível deletar um lote que possui direcionamentos associados.");
+            }
 
-        if (lote.direcionamentos.length > 0) {
-            throw new Error("Não é possível deletar um lote que possui direcionamentos associados.");
-        }
+            const pesoEstornoPorRolo = new Map<string, number>();
+            for (const loteRolo of lote.rolos) {
+                const pesoAtual = pesoEstornoPorRolo.get(loteRolo.estoqueRoloId) ?? 0;
+                pesoEstornoPorRolo.set(loteRolo.estoqueRoloId, pesoAtual + Number(loteRolo.pesoReservado));
+            }
 
-        await prismaClient.loteRolo.deleteMany({
-            where: { loteProducaoId: id }
-        });
+            const rolosIdsEstorno = Array.from(pesoEstornoPorRolo.keys());
+            if (rolosIdsEstorno.length > 0) {
+                const rolosEstoque = await tx.estoqueRolo.findMany({
+                    where: {
+                        id: {
+                            in: rolosIdsEstorno
+                        }
+                    },
+                    select: {
+                        id: true,
+                        pesoAtualKg: true
+                    }
+                });
 
-        await prismaClient.loteItem.deleteMany({
-            where: { loteProducaoId: id }
-        });
+                if (rolosEstoque.length !== rolosIdsEstorno.length) {
+                    throw new Error("Um ou mais rolos do lote não foram encontrados no estoque para estorno.");
+                }
 
-        await prismaClient.loteProducao.delete({
-            where: { id }
-        });
+                await tx.movimentacaoEstoque.createMany({
+                    data: rolosIdsEstorno.map(estoqueRoloId => ({
+                        estoqueRoloId,
+                        usuarioId: lote.responsavelId,
+                        tipoMovimentacao: "entrada",
+                        pesoMovimentado: pesoEstornoPorRolo.get(estoqueRoloId) ?? 0
+                    }))
+                });
 
-        return { message: "Lote deletado com sucesso." };
+                await Promise.all(
+                    rolosEstoque.map((rolo) => {
+                        const pesoEstorno = pesoEstornoPorRolo.get(rolo.id) ?? 0;
+                        const novoPeso = Number(rolo.pesoAtualKg) + pesoEstorno;
+
+                        return tx.estoqueRolo.update({
+                            where: { id: rolo.id },
+                            data: {
+                                pesoAtualKg: novoPeso,
+                                situacao: novoPeso <= 0 ? "esgotado" : "disponivel"
+                            }
+                        });
+                    })
+                );
+            }
+
+            await tx.loteRolo.deleteMany({
+                where: { loteProducaoId: id }
+            });
+
+            await tx.loteItem.deleteMany({
+                where: { loteProducaoId: id }
+            });
+
+            await tx.loteProducao.delete({
+                where: { id }
+            });
+
+            return { message: "Lote deletado com sucesso." };
+        }, INTERACTIVE_TRANSACTION_OPTIONS);
     }
 }
 
