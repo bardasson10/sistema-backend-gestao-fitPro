@@ -736,7 +736,7 @@ Content-Type: application/json
 
 ## 🚚 Direcionamentos
 
-### POST /direcionamentos - Criar Direcionamento
+### POST /direcionamentos - Criar Direcionamento (Granular por Produto/Tamanho)
 ```http
 POST /direcionamentos
 Authorization: Bearer <token>
@@ -744,10 +744,42 @@ Content-Type: application/json
 
 {
   "loteProducaoId": "uuid-lote",
-  "faccaoId": "uuid-faccao",
-  "tipoServico": "costura",
-  "dataSaida": "2026-02-03",
-  "dataPrevisaoRetorno": "2026-02-10"
+  "direcionamentos": [
+    {
+      "faccaoId": "uuid-faccao-1",
+      "tipoServico": "costura",
+      "dataSaida": "2026-03-12",
+      "dataPrevisaoRetorno": "2026-03-19",
+      "items": [
+        {
+          "produtoId": "uuid-produto-1",
+          "tamanhoId": "uuid-tamanho-P",
+          "quantidade": 50
+        },
+        {
+          "produtoId": "uuid-produto-1",
+          "tamanhoId": "uuid-tamanho-M",
+          "quantidade": 60
+        },
+        {
+          "produtoId": "uuid-produto-2",
+          "tamanhoId": "uuid-tamanho-P",
+          "quantidade": 45
+        }
+      ]
+    },
+    {
+      "faccaoId": "uuid-faccao-2",
+      "tipoServico": "costura",
+      "items": [
+        {
+          "produtoId": "uuid-produto-1",
+          "tamanhoId": "uuid-tamanho-G",
+          "quantidade": 55
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -762,8 +794,14 @@ Content-Type: application/json
 **Status:**
 - `enviado`: Enviado para facção
 - `em_processamento`: Em processamento
-- `finalizado`: Finalizado
+- `recebido`: Recebido
 - `cancelado`: Cancelado
+
+**Notas:**
+- Cada direcionamento especifica **quantidade por produto/tamanho** individual
+- Não é obrigatório direcionar tudo do lote
+- Sobras são automaticamente calculadas e armazenadas em uma tabela separada `GradeSobra`
+- Pode consultar sobras via: `GET /lotes/:id/sobras`
 
 ### GET /direcionamentos - Listar
 ```http
@@ -773,6 +811,32 @@ Authorization: Bearer <token>
 
 ### GET /direcionamentos/:id - Buscar com Detalhes Completos
 
+### GET /lotes/:id/sobras - Listar Grades de Sobra
+```http
+GET /lotes/uuid-lote/sobras
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "loteId": "uuid-lote",
+  "codigoLote": "Lote-001",
+  "items": [
+    {
+      "produtoId": "uuid-produto",
+      "tamanhouId": "uuid-tamanho",
+      "produtoNome": "Short Bolso",
+      "sku": "SHR-DRY-003",
+      "tamanhoNome": "G",
+      "quantidadePlanejada": 100,
+      "quantidadeDirecionada": 60,
+      "quantidadeSobra": 40
+    }
+  ]
+}
+```
+
 ### PUT /direcionamentos/:id - Atualizar Status
 ```http
 PUT /direcionamentos/uuid
@@ -780,9 +844,7 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "status": "em_processamento",
-  "dataSaida": "2026-02-03",
-  "dataPrevisaoRetorno": "2026-02-10"
+  "status": "em_processamento"
 }
 ```
 

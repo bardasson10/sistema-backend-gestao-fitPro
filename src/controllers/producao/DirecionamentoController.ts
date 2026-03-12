@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { CreateDirecionamentoService, ListAllDirecionamentoService, ListByIdDirecionamentoService, UpdateDirecionamentoService, DeleteDirecionamentoService } from "../../services/producao/DirecionamentoService";
+import { ListarGradesSobraService } from "../../services/producao/ListarGradesSobraService";
 
 class CreateDirecionamentoController {
     async handle(req: Request, res: Response) {
@@ -47,4 +48,12 @@ class DeleteDirecionamentoController {
     }
 }
 
-export { CreateDirecionamentoController, ListAllDirecionamentoController, ListByIdDirecionamentoController, UpdateDirecionamentoController, DeleteDirecionamentoController };
+class ListarGradesSobraController {
+    async handle(req: Request, res: Response) {
+        const loteProducaoId = req.params.loteId as string;
+        const sobras = await new ListarGradesSobraService().execute(loteProducaoId);
+        return res.json(sobras);
+    }
+}
+
+export { CreateDirecionamentoController, ListAllDirecionamentoController, ListByIdDirecionamentoController, UpdateDirecionamentoController, DeleteDirecionamentoController, ListarGradesSobraController };

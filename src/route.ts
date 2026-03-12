@@ -33,7 +33,7 @@ import { createEstoqueRoloSchema, updateEstoqueRoloSchema, createMovimentacaoEst
 // Produção Controllers
 import { CreateFaccaoController, ListAllFaccaoController, ListByIdFaccaoController, UpdateFaccaoController, DeleteFaccaoController } from "./controllers/producao/FaccaoController";
 import { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, DeleteLoteProducaoController } from "./controllers/producao/LoteProducaoController";
-import { CreateDirecionamentoController, ListAllDirecionamentoController, ListByIdDirecionamentoController, UpdateDirecionamentoController, DeleteDirecionamentoController } from "./controllers/producao/DirecionamentoController";
+import { CreateDirecionamentoController, ListAllDirecionamentoController, ListByIdDirecionamentoController, UpdateDirecionamentoController, DeleteDirecionamentoController, ListarGradesSobraController } from "./controllers/producao/DirecionamentoController";
 import { CreateConferenciaController, ListAllConferenciaController, ListByIdConferenciaController, UpdateConferenciaController, DeleteConferenciaController, GetRelatorioProdutividadeController } from "./controllers/producao/ConferenciaController";
 import { createFaccaoSchema, updateFaccaoSchema, createLoteProducaoSchema, updateLoteProducaoSchema, addLoteItemsSchema, addRolosLoteSchema, createDirecionamentoSchema, updateDirecionamentoSchema, createConferenciaSchema, updateConferenciaSchema } from "./schemas/producaoSchemas";
 
@@ -132,6 +132,7 @@ router.get("/direcionamentos", isAuthenticated, new ListAllDirecionamentoControl
 router.get("/direcionamentos/:id", isAuthenticated, new ListByIdDirecionamentoController().handle);
 router.put("/direcionamentos/:id", isAuthenticated, validateSchema(updateDirecionamentoSchema), new UpdateDirecionamentoController().handle);
 router.delete("/direcionamentos/:id", isAuthenticated, isAdmin, new DeleteDirecionamentoController().handle);
+router.get("/lotes/:loteId/sobras", isAuthenticated, new ListarGradesSobraController().handle);
 
 // ==================== CONFERÊNCIAS ====================
 router.post("/conferencias", isAuthenticated, validateSchema(createConferenciaSchema), new CreateConferenciaController().handle);

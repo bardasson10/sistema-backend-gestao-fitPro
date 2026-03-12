@@ -86,6 +86,8 @@ model Produto {
 
   tipo             TipoProduto  @relation(fields: [tipoProdutoId], references: [id])
   loteItems        LoteItem[]
+  direcionamentoItems DirecionamentoItem[]
+  gradessobra      GradeSobra[]
 
   @@map("produto")
 }
@@ -98,6 +100,8 @@ model Tamanho {
   tiposAceitos      TipoProdutoTamanho[]
   loteItems         LoteItem[]
   conferenciaItems  ConferenciaItem[]
+  direcionamentoItems DirecionamentoItem[]
+  gradessobra       GradeSobra[]
 
   @@map("tamanho")
 }
@@ -233,6 +237,7 @@ model LoteProducao {
   items          LoteItem[]
   rolos          LoteRolo[]
   direcionamentos Direcionamento[]
+  gradessobra    GradeSobra[]
 
   @@index([status])
   @@map("lote_producao")
@@ -318,7 +323,7 @@ model Direcionamento {
   loteProducaoId      String   @map("lote_producao_id")
   faccaoId            String   @map("faccao_id")
   tipoServico         String   @map("tipo_servico")
-  quantidade          Int      @default(0)
+  quantidade          Int      @default(0)  // @deprecated use items sum instead
   status              String   @default("enviado")
   dataSaida           DateTime? @map("data_saida") @db.Date
   dataPrevisaoRetorno DateTime? @map("data_previsao_retorno") @db.Date
@@ -327,10 +332,46 @@ model Direcionamento {
 
   lote                LoteProducao @relation(fields: [loteProducaoId], references: [id])
   faccao              Faccao       @relation(fields: [faccaoId], references: [id])
+  items               DirecionamentoItem[]
   conferencias        Conferencia[]
 
   @@index([status])
   @@map("direcionamento")
+}
+
+model DirecionamentoItem {
+  id                String   @id @default(uuid())
+  direcionamentoId  String   @map("direcionamento_id")
+  produtoId         String   @map("produto_id")
+  tamanhoId         String   @map("tamanho_id")
+  quantidade        Int
+
+  direcionamento    Direcionamento @relation(fields: [direcionamentoId], references: [id], onDelete: Cascade)
+  produto           Produto        @relation(fields: [produtoId], references: [id])
+  tamanho           Tamanho        @relation(fields: [tamanhoId], references: [id])
+
+  @@index([direcionamentoId])
+  @@index([produtoId])
+  @@index([tamanhoId])
+  @@map("direcionamento_item")
+}
+
+model GradeSobra {
+  id               String   @id @default(uuid())
+  loteProducaoId   String   @map("lote_producao_id")
+  produtoId        String   @map("produto_id")
+  tamanhoId        String   @map("tamanho_id")
+  quantidadeSobra  Int      @map("quantidade_sobra")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  lote             LoteProducao @relation(fields: [loteProducaoId], references: [id], onDelete: Cascade)
+  produto          Produto      @relation(fields: [produtoId], references: [id])
+  tamanho          Tamanho      @relation(fields: [tamanhoId], references: [id])
+
+  @@unique([loteProducaoId, produtoId, tamanhoId])
+  @@index([loteProducaoId])
+  @@map("grade_sobra")
 }
 
 model Conferencia {

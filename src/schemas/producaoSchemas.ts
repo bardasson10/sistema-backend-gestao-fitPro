@@ -108,7 +108,13 @@ export const createDirecionamentoSchema = z.object({
         direcionamentos: z.array(z.object({
             faccaoId: z.uuid("ID de facção inválido"),
             tipoServico: z.enum(["costura", "estampa", "tingimento", "acabamento", "corte", "outro"]),
-            quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
+            dataSaida: z.coerce.date().optional(),
+            dataPrevisaoRetorno: z.coerce.date().optional(),
+            items: z.array(z.object({
+                produtoId: z.uuid("ID de produto inválido"),
+                tamanhoId: z.uuid("ID de tamanho inválido"),
+                quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
+            })).min(1, "Informe ao menos um item por direcionamento."),
         })).min(1, "Informe ao menos um direcionamento."),
     }),
 });

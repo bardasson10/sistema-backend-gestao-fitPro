@@ -151,6 +151,7 @@ class CreateEstoqueRoloService {
     }
 }
 
+//TODO melhorar essa response, dividir em 3 modulos conforme abas do frontend
 class ListAllEstoqueRoloService {
     async execute(tecidoId?: string, situacao?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);

@@ -192,6 +192,46 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         }
     });
 
+    // GET /lotes/{loteId}/sobras - Listar grade de sobras do lote
+    registry.registerPath({
+        method: 'get',
+        path: '/lotes/{loteId}/sobras',
+        tags: ['Produção'],
+        summary: 'Listar sobras por produto/tamanho de um lote',
+        security: [{ bearerAuth: [] }],
+        request: {
+            params: z.object({
+                loteId: z.uuid()
+            })
+        },
+        responses: {
+            200: {
+                description: 'Grade de sobras do lote',
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            loteId: z.string().uuid(),
+                            codigoLote: z.string(),
+                            items: z.array(z.object({
+                                produtoId: z.string().uuid(),
+                                tamanhoId: z.string().uuid(),
+                                produtoNome: z.string(),
+                                sku: z.string(),
+                                tamanhoNome: z.string(),
+                                quantidadePlanejada: z.number().int(),
+                                quantidadeDirecionada: z.number().int(),
+                                quantidadeSobra: z.number().int()
+                            }))
+                        })
+                    }
+                }
+            },
+            404: {
+                description: 'Lote não encontrado'
+            }
+        }
+    });
+
     // PUT /lotes-producao/{id} - Atualizar lote de produção
     registry.registerPath({
         method: 'put',

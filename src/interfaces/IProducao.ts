@@ -95,10 +95,18 @@ export interface ILoteProducaoResponse {
 }
 
 // Direcionamento
+export interface IDirecionamentoItemInput {
+    produtoId: string;
+    tamanhoId: string;
+    quantidade: number;
+}
+
 export interface IDirecionamentoInput {
     faccaoId: string;
     tipoServico: "costura" | "estampa" | "tingimento" | "acabamento" | "corte" | "outro";
-    quantidade: number;
+    items: IDirecionamentoItemInput[]; // Granular por produto/tamanho
+    dataSaida?: Date;
+    dataPrevisaoRetorno?: Date;
 }
 
 export interface ICreateDirecionamentoRequest {
@@ -108,6 +116,24 @@ export interface ICreateDirecionamentoRequest {
 
 export interface IUpdateDirecionamentoRequest {
     status?: string;
+}
+
+// Grade Sobra - Rastreamento de itens não direcionados
+export interface IGradeSobraItem {
+    produtoId: string;
+    tamanhoId: string;
+    produtoNome: string;
+    sku: string;
+    tamanhoNome: string;
+    quantidadePlanejada: number;
+    quantidadeDirecionada: number;
+    quantidadeSobra: number;
+}
+
+export interface IGradeSobraResponse {
+    loteId: string;
+    codigoLote: string;
+    items: IGradeSobraItem[];
 }
 
 // Conferencia
