@@ -100,6 +100,14 @@ function extrairRolosReservados(items: ILoteItemComEnfestosInput[]) {
     return rolosReservados;
 }
 
+function calcularQuantidadePlanejadaItem(item: ILoteItemInput, qtdFolhas: number) {
+    if (item.qtdMultiplicadorGrade === undefined || item.qtdMultiplicadorGrade === null) {
+        throw new Error("qtdMultiplicadorGrade é obrigatório para cada item.");
+    }
+
+    return qtdFolhas * item.qtdMultiplicadorGrade;
+}
+
 function normalizarItemsEntrada(enfestos?: IEnfestoComItensProducaoInput[]): ILoteItemComEnfestosInput[] {
     if (!enfestos?.length) {
         return [];
@@ -109,7 +117,8 @@ function normalizarItemsEntrada(enfestos?: IEnfestoComItensProducaoInput[]): ILo
         enfesto.itens.map((item: ILoteItemInput) => ({
             produtoId: item.produtoId,
             tamanhoId: item.tamanhoId,
-            quantidadePlanejada: item.quantidadePlanejada,
+            qtdMultiplicadorGrade: item.qtdMultiplicadorGrade,
+            quantidadePlanejada: calcularQuantidadePlanejadaItem(item, enfesto.qtdFolhas),
             enfestos: [
                 {
                     corId: enfesto.corId,
@@ -132,7 +141,8 @@ function normalizarItemsEntradaAdd(enfestos?: IEnfestoComItensInput[]): ILoteIte
         enfesto.itens.map((item: ILoteItemInput) => ({
             produtoId: item.produtoId,
             tamanhoId: item.tamanhoId,
-            quantidadePlanejada: item.quantidadePlanejada,
+            qtdMultiplicadorGrade: item.qtdMultiplicadorGrade,
+            quantidadePlanejada: calcularQuantidadePlanejadaItem(item, enfesto.qtdFolhas),
             enfestos: [
                 {
                     corId: enfesto.corId,
@@ -184,6 +194,7 @@ function consolidarItemsNormalizados(items: ILoteItemComEnfestosInput[]) {
         }
 
         existente.quantidadePlanejada = item.quantidadePlanejada;
+        existente.qtdMultiplicadorGrade = item.qtdMultiplicadorGrade;
     }
 
     return Array.from(itensConsolidados.values());
@@ -464,11 +475,33 @@ function formatarLoteResponse(lote: any) {
     const gradeLotePorCorSet = new Set<string>();
     const enfestosComputados = new Set<string>();
 
-    const montarGradeItem = (item: any) => ({
+    const resolverQtdMultiplicadorGradeItem = (item: any, corKey: string) => {
+        const enfestoDaCor = (item.enfestos ?? []).find((enfesto: any) => {
+            const corDoEnfesto = resolverCorKeyEnfesto(enfesto);
+            return corDoEnfesto === corKey;
+        });
+
+        if (!enfestoDaCor || Number(enfestoDaCor.qtdFolhas) <= 0) {
+            return null;
+        }
+
+        const quantidadePlanejada = Number(item.quantidadePlanejada);
+        const qtdFolhas = Number(enfestoDaCor.qtdFolhas);
+        const qtdMultiplicadorGrade = quantidadePlanejada / qtdFolhas;
+
+        if (!Number.isFinite(qtdMultiplicadorGrade)) {
+            return null;
+        }
+
+        return qtdMultiplicadorGrade;
+    };
+
+    const montarGradeItem = (corKey: string, item: any) => ({
         id: item.id,
         produtoId: item.produtoId,
         tamanhoId: item.tamanhoId,
         quantidadePlanejada: Number(item.quantidadePlanejada),
+        qtdMultiplicadorGrade: resolverQtdMultiplicadorGradeItem(item, corKey),
         produtoNome: item.produto?.nome,
         sku: item.produto?.sku,
         tamanhoNome: item.tamanho?.nome
@@ -481,7 +514,7 @@ function formatarLoteResponse(lote: any) {
         }
 
         const gradeCorAtual = gradeLotePorCor.get(corKey) ?? [];
-        gradeCorAtual.push(montarGradeItem(item));
+        gradeCorAtual.push(montarGradeItem(corKey, item));
         gradeLotePorCor.set(corKey, gradeCorAtual);
         gradeLotePorCorSet.add(chaveUnica);
     };
@@ -1122,7 +1155,7 @@ class AddLoteItemsService {
                         loteProducaoId: id,
                         produtoId: item.produtoId,
                         tamanhoId: item.tamanhoId,
-                            quantidadePlanejada: item.quantidadePlanejada
+                        quantidadePlanejada: item.quantidadePlanejada
                     }
                 });
 

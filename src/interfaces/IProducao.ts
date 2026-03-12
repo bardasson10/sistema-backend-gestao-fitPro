@@ -19,7 +19,7 @@ export interface IUpdateFaccaoRequest {
 export interface ILoteItemInput {
     produtoId: string;
     tamanhoId: string;
-    quantidadePlanejada: number;
+    qtdMultiplicadorGrade: number;
 }
 
 export interface ILoteRoloInput {
@@ -38,6 +38,7 @@ export interface IEnfestoInput {
 }
 
 export interface ILoteItemComEnfestosInput extends ILoteItemInput {
+    quantidadePlanejada: number;
     enfestos: IEnfestoInput[];
 }
 

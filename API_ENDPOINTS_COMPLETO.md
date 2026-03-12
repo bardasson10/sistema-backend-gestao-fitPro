@@ -941,7 +941,7 @@ Authorization: Bearer <token>
     PUT /lotes-producao/:id { status: "em_producao" }
 
 12.1. Adicionar Itens ao Lote (quando necessário)
-     POST /lotes-producao/:id/items { items }
+  POST /lotes-producao/:id/items { enfestos[].itens[].qtdMultiplicadorGrade }
 
 13. Criar Direcionamento para Facção
     POST /direcionamentos { loteProducaoId, faccaoId, tipoServico, ... }
