@@ -1,6 +1,7 @@
 import { IAddLoteItemsRequest, ICreateLoteProducaoRequest, IEnfestoComItensInput, IEnfestoComItensProducaoInput, ILoteItemComEnfestosInput, ILoteItemInput, IUpdateLoteProducaoRequest } from "../../interfaces/IProducao";
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
+import { ComputarGradesObrasService } from "./ComputarGradesObrasService";
 
 const INTERACTIVE_TRANSACTION_OPTIONS = {
     maxWait: 10000,
@@ -60,7 +61,21 @@ const loteInclude = {
             }
         }
     },
-    direcionamentos: true
+    estoqueCorte: {
+        include: {
+            produto: true,
+            tamanho: true,
+            direcionamentoItems: {
+                include: {
+                    direcionamento: {
+                        include: {
+                            faccao: true
+                        }
+                    }
+                }
+            }
+        }
+    }
 } as const;
 
 type RoloReservado = {
@@ -588,13 +603,34 @@ function formatarLoteResponse(lote: any) {
         }
     ];
 
-    const direcionamentos = lote.direcionamentos.map((direcionamento: any) => ({
-        id: direcionamento.id,
-        faccaoId: direcionamento.faccaoId,
-        tipoServico: direcionamento.tipoServico,
-        status: direcionamento.status,
-        dataPrevisaoRetorno: direcionamento.dataPrevisaoRetorno
-    }));
+    const direcionamentosMap = new Map<string, {
+        id: string;
+        faccaoId: string;
+        faccaoNome?: string;
+        tipoServico: string;
+        status: string;
+        dataPrevisaoRetorno: Date | null;
+    }>();
+
+    for (const estoque of lote.estoqueCorte ?? []) {
+        for (const item of estoque.direcionamentoItems ?? []) {
+            const direcionamento = item.direcionamento;
+            if (!direcionamento || direcionamentosMap.has(direcionamento.id)) {
+                continue;
+            }
+
+            direcionamentosMap.set(direcionamento.id, {
+                id: direcionamento.id,
+                faccaoId: direcionamento.faccaoId,
+                faccaoNome: direcionamento.faccao?.nome,
+                tipoServico: direcionamento.tipoServico,
+                status: direcionamento.status,
+                dataPrevisaoRetorno: direcionamento.dataPrevisaoRetorno
+            });
+        }
+    }
+
+    const direcionamentos = Array.from(direcionamentosMap.values());
 
     return {
         id: lote.id,
@@ -760,15 +796,7 @@ class ListByIdLoteProducaoService {
     async execute(id: string) {
         const lote = await prismaClient.loteProducao.findUnique({
             where: { id },
-            include: {
-                ...loteInclude,
-                direcionamentos: {
-                    include: {
-                        faccao: true,
-                        conferencias: true
-                    }
-                }
-            }
+            include: loteInclude
         });
 
         if (!lote) {
@@ -781,7 +809,7 @@ class ListByIdLoteProducaoService {
 
 class UpdateLoteProducaoService {
     async execute(id: string, { loteId, codigoLote, responsavelId, status, observacao, enfestos, usuarioId }: IUpdateLoteProducaoRequest) {
-        return prismaClient.$transaction(async (tx) => {
+        const loteAtualizado = await prismaClient.$transaction(async (tx) => {
             const lote = await tx.loteProducao.findUnique({
                 where: { id }
             });
@@ -1045,6 +1073,10 @@ class UpdateLoteProducaoService {
 
             return formatarLoteResponse(loteAtualizado);
         }, INTERACTIVE_TRANSACTION_OPTIONS);
+
+        await new ComputarGradesObrasService().execute(id);
+
+        return loteAtualizado;
     }
 }
 
@@ -1186,7 +1218,18 @@ class AddLoteItemsService {
             throw new Error("Erro ao atualizar lote.");
         }
 
-        return formatarLoteResponse(loteAtualizado);
+        await new ComputarGradesObrasService().execute(id);
+
+        const loteAtualizadoComEstoque = await prismaClient.loteProducao.findUnique({
+            where: { id },
+            include: loteInclude
+        });
+
+        if (!loteAtualizadoComEstoque) {
+            throw new Error("Lote nao encontrado apos sincronizar estoque de corte.");
+        }
+
+        return formatarLoteResponse(loteAtualizadoComEstoque);
     }
 }
 
@@ -1197,7 +1240,11 @@ class DeleteLoteProducaoService {
                 where: { id },
                 include: {
                     rolos: true,
-                    direcionamentos: true
+                    estoqueCorte: {
+                        include: {
+                            direcionamentoItems: true
+                        }
+                    }
                 }
             });
 
@@ -1205,7 +1252,11 @@ class DeleteLoteProducaoService {
                 throw new Error("Lote não encontrado.");
             }
 
-            if (lote.direcionamentos.length > 0) {
+            const possuiDirecionamentosAssociados = lote.estoqueCorte.some(
+                (estoque) => estoque.direcionamentoItems.length > 0
+            );
+
+            if (possuiDirecionamentosAssociados) {
                 throw new Error("Não é possível deletar um lote que possui direcionamentos associados.");
             }
 

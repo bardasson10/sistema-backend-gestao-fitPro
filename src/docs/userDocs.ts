@@ -5,6 +5,42 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 
 extendZodWithOpenApi(z);
 
+const errorSchema = z.object({
+    error: z.string()
+});
+
+const messageSchema = z.object({
+    message: z.string()
+});
+
+const userSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    email: z.string().email(),
+    perfil: z.enum(['ADM', 'GERENTE', 'FUNCIONARIO']),
+    status: z.string().optional(),
+    funcaoSetor: z.string().nullable().optional(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional()
+});
+
+const authResponseSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    email: z.string().email(),
+    perfil: z.enum(['ADM', 'GERENTE', 'FUNCIONARIO']),
+    token: z.string(),
+    dataCriacao: z.string().datetime()
+});
+
+const paginatedUsersSchema = z.object({
+    data: z.array(userSchema),
+    total: z.number().int(),
+    page: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int()
+});
+
 export function registerUserRoutes(registry: OpenAPIRegistry) {
     // POST /users - Criar usuário
     registry.registerPath({
@@ -26,7 +62,7 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
                 description: 'Usuário criado com sucesso',
                 content: {
                     'application/json': {
-                        schema: createUserSchema
+                        schema: userSchema
                     }
                 }
             },
@@ -34,12 +70,7 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
                 description: 'Erro de validação',
                 content: {
                     'application/json': {
-                        schema: {
-                            type: 'object',
-                            properties: {
-                                error: { type: 'string' }
-                            }
-                        }
+                        schema: errorSchema
                     }
                 }
             }
@@ -67,26 +98,17 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
                 description: 'Autenticação realizada',
                 content: {
                     'application/json': {
-                        schema: {
-                            type: 'object',
-                            properties: {
-                                token: { type: 'string' },
-                                user: {
-                                    type: 'object',
-                                    properties: {
-                                        id: { type: 'string' },
-                                        nome: { type: 'string' },
-                                        email: { type: 'string' },
-                                        perfil: { type: 'string' }
-                                    }
-                                }
-                            }
-                        }
+                        schema: authResponseSchema
                     }
                 }
             },
             401: {
-                description: 'Credenciais inválidas'
+                description: 'Credenciais inválidas',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -104,17 +126,17 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
                 description: 'Logout realizado com sucesso',
                 content: {
                     'application/json': {
-                        schema: {
-                            type: 'object',
-                            properties: {
-                                message: { type: 'string', example: 'Logout realizado com sucesso.' }
-                            }
-                        }
+                        schema: messageSchema
                     }
                 }
             },
             401: {
-                description: 'Token não fornecido ou inválido'
+                description: 'Token não fornecido ou inválido',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -131,17 +153,7 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
                 description: 'Lista de usuários',
                 content: {
                     'application/json': {
-                        schema: {
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                properties: {
-                                    id: { type: 'string' },
-                                    nome: { type: 'string' },
-                                    email: { type: 'string' }
-                                }
-                            }
-                        }
+                        schema: paginatedUsersSchema
                     }
                 }
             }
@@ -157,7 +169,12 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Dados do usuário'
+                description: 'Dados do usuário',
+                content: {
+                    'application/json': {
+                        schema: userSchema
+                    }
+                }
             }
         }
     });
@@ -176,10 +193,20 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Usuário encontrado'
+                description: 'Usuário encontrado',
+                content: {
+                    'application/json': {
+                        schema: userSchema
+                    }
+                }
             },
             404: {
-                description: 'Usuário não encontrado'
+                description: 'Usuário não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -225,10 +252,20 @@ export function registerUserRoutes(registry: OpenAPIRegistry) {
                 }
             },
             400: {
-                description: 'Erro de validação'
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             },
             404: {
-                description: 'Usuário não encontrado'
+                description: 'Usuário não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });

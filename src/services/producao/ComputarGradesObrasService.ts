@@ -1,88 +1,65 @@
 import prismaClient from "../../prisma";
 
-/**
- * Service para calcular e atualizar grades de sobra de um lote
- * Sobra = quantidade planejada - soma de todos os direcionamentos
- * 
- * Chamado após criar/atualizar direcionamentos
- */
 class ComputarGradesObrasService {
     async execute(loteProducaoId: string) {
-        // Buscar lote com todos os items e direcionamentos
         const lote = await prismaClient.loteProducao.findUnique({
             where: { id: loteProducaoId },
             include: {
-                items: {
-                    include: {
-                        produto: true,
-                        tamanho: true
-                    }
-                },
-                direcionamentos: {
-                    include: {
-                        items: true
-                    }
-                }
+                items: true,
+                estoqueCorte: true
             }
         });
 
         if (!lote) {
-            throw new Error("Lote não encontrado.");
+            throw new Error("Lote nao encontrado.");
         }
 
-        // Para cada item do lote, calcular a sobra
-        const gradesObrasParaAtualizar: Array<{
-            loteProducaoId: string;
+        const planejadoPorProdutoTamanho = new Map<string, {
             produtoId: string;
             tamanhoId: string;
-            quantidadeSobra: number;
-        }> = [];
+            quantidadePlanejada: number;
+        }>();
 
         for (const item of lote.items) {
-            // Somar quantidade direcionada deste produto/tamanho
-            let quantidadeDirecionada = 0;
-            for (const direcionamento of lote.direcionamentos) {
-                const dirItem = direcionamento.items.find(
-                    di => di.produtoId === item.produtoId && di.tamanhoId === item.tamanhoId
-                );
-                if (dirItem) {
-                    quantidadeDirecionada += dirItem.quantidade;
-                }
+            const key = `${item.produtoId}|${item.tamanhoId}`;
+            const atual = planejadoPorProdutoTamanho.get(key);
+
+            if (!atual) {
+                planejadoPorProdutoTamanho.set(key, {
+                    produtoId: item.produtoId,
+                    tamanhoId: item.tamanhoId,
+                    quantidadePlanejada: item.quantidadePlanejada
+                });
+                continue;
             }
 
-            // Calcular sobra (se negativa, igualar a 0)
-            const quantidadeSobra = Math.max(0, item.quantidadePlanejada - quantidadeDirecionada);
+            atual.quantidadePlanejada += item.quantidadePlanejada;
+        }
 
-            gradesObrasParaAtualizar.push({
+        const estoqueExistentePorKey = new Map(
+            lote.estoqueCorte.map((estoque) => [`${estoque.produtoId}|${estoque.tamanhoId}`, estoque])
+        );
+
+        const paraCriar = Array.from(planejadoPorProdutoTamanho.entries())
+            .filter(([key]) => !estoqueExistentePorKey.has(key))
+            .map(([, item]) => ({
                 loteProducaoId,
                 produtoId: item.produtoId,
                 tamanhoId: item.tamanhoId,
-                quantidadeSobra
+                quantidadeDisponivel: item.quantidadePlanejada
+            }));
+
+        if (paraCriar.length > 0) {
+            await prismaClient.estoqueCorte.createMany({
+                data: paraCriar,
+                skipDuplicates: true
             });
         }
 
-        // Usar transação para atualizar grades de sobra
-        await prismaClient.$transaction(async (tx) => {
-            // Deletar todas as grades de sobra existentes para este lote
-            await tx.gradeSobra.deleteMany({
-                where: { loteProducaoId }
-            });
-
-            // Inserir novas grades de sobra (apenas as com sobra > 0)
-            const gradesComSobra = gradesObrasParaAtualizar.filter(g => g.quantidadeSobra > 0);
-            
-            if (gradesComSobra.length > 0) {
-                await tx.gradeSobra.createMany({
-                    data: gradesComSobra,
-                    skipDuplicates: true
-                });
-            }
-        });
-
         return {
-            message: "Grades de sobra calculadas com sucesso.",
+            message: "Estoque de corte sincronizado com sucesso.",
             loteId: loteProducaoId,
-            gradesAtualizadas: gradesObrasParaAtualizar.filter(g => g.quantidadeSobra > 0).length
+            itensCriados: paraCriar.length
         };
     }
 }

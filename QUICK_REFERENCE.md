@@ -134,6 +134,13 @@ PUT    /estoque-rolos/:id
 DELETE /estoque-rolos/:id
 ```
 
+### Estoque de Corte (3)
+```
+GET    /estoque-corte?produtoId=&loteProducaoId=&tamanhoId=
+GET    /estoque-corte/:id
+PATCH  /estoque-corte/:id/ajuste
+```
+
 ### Produção (30)
 ```
 POST   /faccoes | /lotes-producao | /direcionamentos | /conferencias
@@ -164,7 +171,7 @@ planejado → em_producao → concluido
 
 ### Direcionamento
 ```
-enviado → em_processamento → finalizado
+enviado → em_processamento → recebido
        ↘ cancelado
 ```
 
@@ -200,7 +207,7 @@ Devolução: peso_atual -= peso_movimentado
 ```
 Validadas antes de atualizar
 Evita estados inválidos
-Exemplo: Não pode ir de "finalizado" para outro estado
+Exemplo: Não pode ir de "recebido" para outro estado
 ```
 
 ---
@@ -234,6 +241,9 @@ GET /movimentacoes-estoque?dataInicio=2026-01-01&dataFim=2026-02-03
 
 # Múltiplos filtros
 GET /conferencias?statusQualidade=conforme&liberadoPagamento=true
+
+# Estoque de corte disponivel
+GET /estoque-corte?loteProducaoId=uuid-do-lote
 ```
 
 ---
@@ -290,8 +300,8 @@ POST /conferencias
   "direcionamentoId": "uuid",
   "responsavelId": "uuid",
   "items": [
-    {"tamanhoId": "uuid-P", "qtdRecebida": 50, "qtdDefeito": 0},
-    {"tamanhoId": "uuid-M", "qtdRecebida": 95, "qtdDefeito": 5}
+    {"direcionamentoItemId": "uuid-item-P-preto", "qtdRecebida": 50, "qtdDefeito": 0},
+    {"direcionamentoItemId": "uuid-item-M-branco", "qtdRecebida": 95, "qtdDefeito": 5}
   ]
 }
 ```

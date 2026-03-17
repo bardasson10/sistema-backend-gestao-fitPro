@@ -54,3 +54,8 @@ export interface IRelatoriEstoqueResponse {
     rolosEmUso: number;
     movimentacoesMes: number;
 }
+
+export interface IAjusteEstoqueCorteRequest {
+    novaQuantidade: number;
+    motivo: string;
+}

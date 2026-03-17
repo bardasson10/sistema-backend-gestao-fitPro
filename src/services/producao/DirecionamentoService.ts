@@ -1,152 +1,176 @@
 import { ICreateDirecionamentoRequest, IUpdateDirecionamentoRequest } from "../../interfaces/IProducao";
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
-import { ComputarGradesObrasService } from "./ComputarGradesObrasService";
+
+const direcionamentoInclude = {
+    faccao: true,
+    items: {
+        include: {
+            estoqueCorte: {
+                include: {
+                    lote: {
+                        include: {
+                            tecido: true,
+                            responsavel: true
+                        }
+                    },
+                    produto: true,
+                    tamanho: true
+                }
+            }
+        }
+    },
+    conferencias: {
+        include: {
+            responsavel: true,
+            items: {
+                include: {
+                    tamanho: true
+                }
+            }
+        }
+    }
+} as const;
+
+function mapQuantidadeSolicitadaPorEstoque(direcionamentos: ICreateDirecionamentoRequest["direcionamentos"]) {
+    const quantidadePorEstoque = new Map<string, number>();
+
+    for (const direcionamento of direcionamentos) {
+        for (const item of direcionamento.items) {
+            const atual = quantidadePorEstoque.get(item.estoqueCorteId) ?? 0;
+            quantidadePorEstoque.set(item.estoqueCorteId, atual + item.quantidade);
+        }
+    }
+
+    return quantidadePorEstoque;
+}
 
 class CreateDirecionamentoService {
-    async execute({ loteProducaoId, direcionamentos }: ICreateDirecionamentoRequest) {
+    async execute({ direcionamentos }: ICreateDirecionamentoRequest) {
         if (!direcionamentos?.length) {
             throw new Error("Informe ao menos um direcionamento.");
         }
 
-        // Verificar se lote existe e buscar itens
-        const lote = await prismaClient.loteProducao.findUnique({
-            where: { id: loteProducaoId },
-            include: {
-                items: {
-                    include: {
-                        produto: true,
-                        tamanho: true
-                    }
-                }
-            }
-        });
-
-        if (!lote) {
-            throw new Error("Lote não encontrado.");
-        }
-
-        if (lote.items.length === 0) {
-            throw new Error("Não é possível direcionar lote sem itens na grade.");
-        }
-
-        // Validar cada direcionamento
         const faccoesIds: string[] = [];
-        const itemsMapaProdutoTamanho = new Map<string, number>();
 
-        // Construir mapa de itens do lote
-        for (const loteItem of lote.items) {
-            itemsMapaProdutoTamanho.set(`${loteItem.produtoId}|${loteItem.tamanhoId}`, loteItem.quantidadePlanejada);
-        }
-
-        // Validar direcionamentos
         for (const direcao of direcionamentos) {
-            if (!direcao.items || direcao.items.length === 0) {
+            if (!direcao.items?.length) {
                 throw new Error("Cada direcionamento deve ter ao menos um item.");
             }
 
             faccoesIds.push(direcao.faccaoId);
 
-            // Validar items do direcionamento
             for (const dirItem of direcao.items) {
-                const key = `${dirItem.produtoId}|${dirItem.tamanhoId}`;
-                
-                // Verificar se produto/tamanho existe no lote
-                if (!itemsMapaProdutoTamanho.has(key)) {
-                    throw new Error(`Produto/tamanho (${dirItem.produtoId}/${dirItem.tamanhoId}) não existe neste lote.`);
-                }
-
                 if (dirItem.quantidade <= 0) {
                     throw new Error("Quantidade de direcionamento deve ser maior que 0.");
                 }
             }
         }
 
-        // Validar facções
+        const faccoesUnicas = [...new Set(faccoesIds)];
         const faccoes = await prismaClient.faccao.findMany({
-            where: {
-                id: {
-                    in: [...new Set(faccoesIds)]
+            where: { id: { in: faccoesUnicas } },
+            select: { id: true, status: true }
+        });
+
+        if (faccoes.length !== faccoesUnicas.length) {
+            throw new Error("Uma ou mais faccoes nao foram encontradas.");
+        }
+
+        if (faccoes.some((faccao) => faccao.status !== "ativo")) {
+            throw new Error("Uma ou mais faccoes estao inativas. Nao e possivel enviar direcionamentos.");
+        }
+
+        const quantidadePorEstoque = mapQuantidadeSolicitadaPorEstoque(direcionamentos);
+        const estoqueIds = Array.from(quantidadePorEstoque.keys());
+
+        const estoques = await prismaClient.estoqueCorte.findMany({
+            where: { id: { in: estoqueIds } },
+            include: {
+                lote: {
+                    select: {
+                        id: true,
+                        status: true
+                    }
                 }
-            },
-            select: {
-                id: true,
-                status: true
             }
         });
 
-        if (faccoes.length !== new Set(faccoesIds).size) {
-            throw new Error("Uma ou mais facções não foram encontradas.");
+        if (estoques.length !== estoqueIds.length) {
+            throw new Error("Um ou mais itens de estoque de corte nao foram encontrados.");
         }
 
-        const faccaoInativa = faccoes.find((faccao) => faccao.status !== "ativo");
-        if (faccaoInativa) {
-            throw new Error("Uma ou mais facções estão inativas. Não é possível enviar direcionamentos.");
+        const estoquePorId = new Map(estoques.map((estoque) => [estoque.id, estoque]));
+
+        for (const [estoqueCorteId, quantidadeSolicitada] of quantidadePorEstoque.entries()) {
+            const estoque = estoquePorId.get(estoqueCorteId);
+            if (!estoque) {
+                throw new Error("Item de estoque de corte nao encontrado.");
+            }
+
+            if (quantidadeSolicitada > estoque.quantidadeDisponivel) {
+                throw new Error(`Estoque insuficiente para o item ${estoqueCorteId}. Disponivel: ${estoque.quantidadeDisponivel}.`);
+            }
         }
 
-        // Usar transação para criar direcionamentos
+        const lotesPlanejados = [...new Set(
+            estoques
+                .filter((estoque) => estoque.lote.status === "planejado")
+                .map((estoque) => estoque.lote.id)
+        )];
+
         const direcionamentosCriados = await prismaClient.$transaction(async (tx) => {
-            // Atualizar status do lote de "planejado" para "em_producao" se necessário
-            if (lote.status === "planejado") {
+            for (const loteId of lotesPlanejados) {
                 await tx.loteProducao.update({
-                    where: { id: loteProducaoId },
+                    where: { id: loteId },
                     data: { status: "em_producao" }
                 });
             }
 
-            const resultado = await Promise.all(
+            for (const [estoqueCorteId, quantidadeSolicitada] of quantidadePorEstoque.entries()) {
+                const resultado = await tx.estoqueCorte.updateMany({
+                    where: {
+                        id: estoqueCorteId,
+                        quantidadeDisponivel: {
+                            gte: quantidadeSolicitada
+                        }
+                    },
+                    data: {
+                        quantidadeDisponivel: {
+                            decrement: quantidadeSolicitada
+                        }
+                    }
+                });
+
+                if (resultado.count !== 1) {
+                    throw new Error(`Saldo insuficiente para o item ${estoqueCorteId} durante a confirmacao da remessa.`);
+                }
+            }
+
+            return Promise.all(
                 direcionamentos.map((direcionamento) => {
-                    // Calcular quantidade total deste direcionamento (soma dos items)
                     const quantidadeTotal = direcionamento.items.reduce((sum, item) => sum + item.quantidade, 0);
 
                     return tx.direcionamento.create({
                         data: {
-                            loteProducaoId,
                             faccaoId: direcionamento.faccaoId,
                             tipoServico: direcionamento.tipoServico,
-                            quantidade: quantidadeTotal, // Armazenar soma como denormalizacao
+                            quantidade: quantidadeTotal,
                             dataSaida: direcionamento.dataSaida || new Date(),
                             dataPrevisaoRetorno: direcionamento.dataPrevisaoRetorno || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                             status: "enviado",
                             items: {
                                 create: direcionamento.items.map((item) => ({
-                                    produtoId: item.produtoId,
-                                    tamanhoId: item.tamanhoId,
+                                    estoqueCorteId: item.estoqueCorteId,
                                     quantidade: item.quantidade
                                 }))
                             }
                         },
-                        include: {
-                            lote: {
-                                include: {
-                                    tecido: true,
-                                    items: {
-                                        include: {
-                                            produto: true,
-                                            tamanho: true
-                                        }
-                                    }
-                                }
-                            },
-                            faccao: true,
-                            items: {
-                                include: {
-                                    produto: true,
-                                    tamanho: true
-                                }
-                            },
-                            conferencias: true
-                        }
+                        include: direcionamentoInclude
                     });
                 })
             );
-
-            return resultado;
         });
-
-        // Atualizar grades de sobra
-        const computarSobras = new ComputarGradesObrasService();
-        await computarSobras.execute(loteProducaoId);
 
         return direcionamentosCriados;
     }
@@ -162,27 +186,7 @@ class ListAllDirecionamentoService {
                     ...(status && { status }),
                     ...(faccaoId && { faccaoId })
                 },
-                include: {
-                    lote: {
-                        include: {
-                            tecido: true,
-                            items: {
-                                include: {
-                                    produto: true,
-                                    tamanho: true
-                                }
-                            }
-                        }
-                    },
-                    faccao: true,
-                    items: {
-                        include: {
-                            produto: true,
-                            tamanho: true
-                        }
-                    },
-                    conferencias: true
-                },
+                include: direcionamentoInclude,
                 skip,
                 take: pageLimit,
                 orderBy: {
@@ -205,41 +209,11 @@ class ListByIdDirecionamentoService {
     async execute(id: string) {
         const direcionamento = await prismaClient.direcionamento.findUnique({
             where: { id },
-            include: {
-                lote: {
-                    include: {
-                        tecido: true,
-                        responsavel: true,
-                        items: {
-                            include: {
-                                produto: true,
-                                tamanho: true
-                            }
-                        }
-                    }
-                },
-                faccao: true,
-                items: {
-                    include: {
-                        produto: true,
-                        tamanho: true
-                    }
-                },
-                conferencias: {
-                    include: {
-                        responsavel: true,
-                        items: {
-                            include: {
-                                tamanho: true
-                            }
-                        }
-                    }
-                }
-            }
+            include: direcionamentoInclude
         });
 
         if (!direcionamento) {
-            throw new Error("Direcionamento não encontrado.");
+            throw new Error("Direcionamento nao encontrado.");
         }
 
         return direcionamento;
@@ -251,32 +225,52 @@ class UpdateDirecionamentoService {
         const direcionamento = await prismaClient.direcionamento.findUnique({
             where: { id },
             include: {
-                lote: true
+                items: {
+                    include: {
+                        estoqueCorte: {
+                            include: {
+                                lote: {
+                                    select: {
+                                        responsavelId: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         });
 
         if (!direcionamento) {
-            throw new Error("Direcionamento não encontrado.");
+            throw new Error("Direcionamento nao encontrado.");
         }
 
-        // Validar transições de status
         const statusValidos: Record<string, string[]> = {
-            "enviado": ["em_processamento", "recebido", "cancelado"],
-            "em_processamento": ["recebido", "cancelado"],
-            "recebido": [],
-            "cancelado": []
+            enviado: ["em_processamento", "recebido", "cancelado"],
+            em_processamento: ["recebido", "cancelado"],
+            recebido: [],
+            cancelado: []
         };
 
         if (status && !statusValidos[direcionamento.status]?.includes(status)) {
-            throw new Error(`Não é permitido mudar status de '${direcionamento.status}' para '${status}'.`);
+            throw new Error(`Nao e permitido mudar status de '${direcionamento.status}' para '${status}'.`);
         }
 
-        // Usar transação para atualizar direcionamento
         const direcionamentoAtualizado = await prismaClient.$transaction(async (tx) => {
-            // Preparar dados para atualização
-            const dataUpdate: any = { status };
-            
-            // Se status for "recebido", preencher dataPrevisaoRetorno
+            if (status === "cancelado" && direcionamento.status !== "cancelado") {
+                for (const item of direcionamento.items) {
+                    await tx.estoqueCorte.update({
+                        where: { id: item.estoqueCorteId },
+                        data: {
+                            quantidadeDisponivel: {
+                                increment: item.quantidade
+                            }
+                        }
+                    });
+                }
+            }
+
+            const dataUpdate: { status?: string; dataPrevisaoRetorno?: Date } = { status };
             if (status === "recebido") {
                 dataUpdate.dataPrevisaoRetorno = new Date();
             }
@@ -287,14 +281,21 @@ class UpdateDirecionamentoService {
                 });
 
                 if (!conferenciaExistente) {
-                    if (!direcionamento.lote?.responsavelId) {
-                        throw new Error("Responsável do lote não encontrado para criar conferência.");
+                    const responsavelIds = [...new Set(
+                        direcionamento.items
+                            .map((item) => item.estoqueCorte.lote.responsavelId)
+                            .filter(Boolean)
+                    )];
+
+                    const responsavelId = responsavelIds[0];
+                    if (!responsavelId) {
+                        throw new Error("Nao foi possivel identificar um responsavel para criar a conferencia.");
                     }
 
                     await tx.conferencia.create({
                         data: {
                             direcionamentoId: id,
-                            responsavelId: direcionamento.lote.responsavelId,
+                            responsavelId,
                             dataConferencia: new Date(),
                             statusQualidade: "validando",
                             liberadoPagamento: false
@@ -303,48 +304,12 @@ class UpdateDirecionamentoService {
                 }
             }
 
-            // Atualizar direçionamento
-            const novoDir = await tx.direcionamento.update({
+            return tx.direcionamento.update({
                 where: { id },
                 data: dataUpdate,
-                include: {
-                    lote: {
-                        include: {
-                            tecido: true,
-                            items: {
-                                include: {
-                                    produto: true,
-                                    tamanho: true
-                                }
-                            }
-                        }
-                    },
-                    faccao: true,
-                    items: {
-                        include: {
-                            produto: true,
-                            tamanho: true
-                        }
-                    },
-                    conferencias: {
-                        include: {
-                            responsavel: true,
-                            items: {
-                                include: {
-                                    tamanho: true
-                                }
-                            }
-                        }
-                    }
-                }
+                include: direcionamentoInclude
             });
-
-            return novoDir;
         });
-
-        // Recalcular sobras após atualizar (em caso de cancelamento, por exemplo)
-        const computarSobras = new ComputarGradesObrasService();
-        await computarSobras.execute(direcionamento.loteProducaoId);
 
         return direcionamentoAtualizado;
     }
@@ -356,28 +321,36 @@ class DeleteDirecionamentoService {
             where: { id },
             include: {
                 conferencias: true,
-                lote: true
+                items: true
             }
         });
 
         if (!direcionamento) {
-            throw new Error("Direcionamento não encontrado.");
+            throw new Error("Direcionamento nao encontrado.");
         }
 
         if (direcionamento.conferencias.length > 0) {
-            throw new Error("Não é possível deletar um direcionamento que possui conferências associadas.");
+            throw new Error("Nao e possivel deletar um direcionamento que possui conferencias associadas.");
         }
 
-        // Deletar direcionamento em transação e recalcular sobras
         await prismaClient.$transaction(async (tx) => {
+            if (direcionamento.status !== "cancelado") {
+                for (const item of direcionamento.items) {
+                    await tx.estoqueCorte.update({
+                        where: { id: item.estoqueCorteId },
+                        data: {
+                            quantidadeDisponivel: {
+                                increment: item.quantidade
+                            }
+                        }
+                    });
+                }
+            }
+
             await tx.direcionamento.delete({
                 where: { id }
             });
         });
-
-        // Recalcular sobras após deletar
-        const computarSobras = new ComputarGradesObrasService();
-        await computarSobras.execute(direcionamento.loteProducaoId);
 
         return { message: "Direcionamento deletado com sucesso." };
     }

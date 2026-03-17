@@ -1,8 +1,8 @@
 # 📚 Documentação Completa de Endpoints - CRUD Sistema de Produção
 
-**Versão**: 1.0.0  
-**Última Atualização**: Fevereiro, 2026  
-**Status**: Completo e Pronto para Implementação
+**Versão**: 1.1.0  
+**Última Atualização**: Março, 2026  
+**Status**: Atualizado com arquitetura de Estoque de Corte
 
 ---
 
@@ -12,8 +12,17 @@ Todos os endpoints (exceto criação de usuário e login) requerem autenticaçã
 
 **Header Obrigatório:**
 ```http
-Authorization: Bearer <seu_token_jwt>
+Authorization: Bearer <token_jwt>
 ```
+
+### Atualizações de Março/2026
+- `Direcionamento` agora consome `EstoqueCorte` por `estoqueCorteId`.
+- `POST /direcionamentos` nao recebe mais `loteProducaoId` no body.
+- `ConferenciaItem` agora referencia `direcionamentoItemId` (rastreabilidade completa por lote/produto/tamanho/cor).
+- Novos endpoints do modulo de corte:
+  - `GET /estoque-corte`
+  - `GET /estoque-corte/:id`
+  - `PATCH /estoque-corte/:id/ajuste` (ADM/GERENTE)
 
 **Roles e Permissões:**
 - `ADM`: Acesso completo (CRUD de todas as entidades)
@@ -44,10 +53,6 @@ Content-Type: application/json
   "id": "uuid",
   "nome": "João Silva",
   "email": "joao@example.com",
-  "perfil": "FUNCIONARIO",
-  "status": "ativo",
-  "funcaoSetor": "Costura",
-  "createdAt": "2026-02-03T10:00:00Z"
 }
 ```
 
@@ -734,16 +739,45 @@ Content-Type: application/json
 
 ---
 
+## ✂️ Estoque de Corte
+
+### GET /estoque-corte - Listar saldo disponivel para remessa
+```http
+GET /estoque-corte?produtoId=uuid&loteProducaoId=uuid&tamanhoId=uuid
+Authorization: Bearer <token>
+```
+
+**Regra:** retorna apenas itens com `quantidadeDisponivel > 0`.
+
+### GET /estoque-corte/:id - Detalhar item e historico de envio
+```http
+GET /estoque-corte/uuid-estoque-corte
+Authorization: Bearer <token>
+```
+
+### PATCH /estoque-corte/:id/ajuste - Ajuste manual (ADM/GERENTE)
+```http
+PATCH /estoque-corte/uuid-estoque-corte/ajuste
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "novaQuantidade": 498,
+  "motivo": "Contagem fisica identificou 2 pecas a menos no cesto"
+}
+```
+
+---
+
 ## 🚚 Direcionamentos
 
-### POST /direcionamentos - Criar Direcionamento (Granular por Produto/Tamanho)
+### POST /direcionamentos - Criar Direcionamento por Estoque de Corte
 ```http
 POST /direcionamentos
 Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "loteProducaoId": "uuid-lote",
   "direcionamentos": [
     {
       "faccaoId": "uuid-faccao-1",
@@ -752,30 +786,12 @@ Content-Type: application/json
       "dataPrevisaoRetorno": "2026-03-19",
       "items": [
         {
-          "produtoId": "uuid-produto-1",
-          "tamanhoId": "uuid-tamanho-P",
+          "estoqueCorteId": "uuid-estoque-corte-1",
           "quantidade": 50
         },
         {
-          "produtoId": "uuid-produto-1",
-          "tamanhoId": "uuid-tamanho-M",
+          "estoqueCorteId": "uuid-estoque-corte-2",
           "quantidade": 60
-        },
-        {
-          "produtoId": "uuid-produto-2",
-          "tamanhoId": "uuid-tamanho-P",
-          "quantidade": 45
-        }
-      ]
-    },
-    {
-      "faccaoId": "uuid-faccao-2",
-      "tipoServico": "costura",
-      "items": [
-        {
-          "produtoId": "uuid-produto-1",
-          "tamanhoId": "uuid-tamanho-G",
-          "quantidade": 55
         }
       ]
     }
@@ -798,10 +814,10 @@ Content-Type: application/json
 - `cancelado`: Cancelado
 
 **Notas:**
-- Cada direcionamento especifica **quantidade por produto/tamanho** individual
-- Não é obrigatório direcionar tudo do lote
-- Sobras são automaticamente calculadas e armazenadas em uma tabela separada `GradeSobra`
-- Pode consultar sobras via: `GET /lotes/:id/sobras`
+- Cada item referencia diretamente um saldo de corte (`estoqueCorteId`).
+- A criacao decrementa `quantidadeDisponivel` em transacao.
+- O cancelamento/delecao devolve saldo para o estoque de corte.
+- Pode consultar sobras do lote em: `GET /lotes/:id/sobras`.
 
 ### GET /direcionamentos - Listar
 ```http
@@ -811,30 +827,10 @@ Authorization: Bearer <token>
 
 ### GET /direcionamentos/:id - Buscar com Detalhes Completos
 
-### GET /lotes/:id/sobras - Listar Grades de Sobra
+### GET /lotes/:id/sobras - Listar saldo por item do lote
 ```http
 GET /lotes/uuid-lote/sobras
 Authorization: Bearer <token>
-```
-
-**Response:**
-```json
-{
-  "loteId": "uuid-lote",
-  "codigoLote": "Lote-001",
-  "items": [
-    {
-      "produtoId": "uuid-produto",
-      "tamanhouId": "uuid-tamanho",
-      "produtoNome": "Short Bolso",
-      "sku": "SHR-DRY-003",
-      "tamanhoNome": "G",
-      "quantidadePlanejada": 100,
-      "quantidadeDirecionada": 60,
-      "quantidadeSobra": 40
-    }
-  ]
-}
 ```
 
 ### PUT /direcionamentos/:id - Atualizar Status
@@ -869,12 +865,12 @@ Content-Type: application/json
   "observacao": "Tudo em ordem",
   "items": [
     {
-      "tamanhoId": "uuid-tamanho-P",
+      "direcionamentoItemId": "uuid-direcionamento-item-P-preto",
       "qtdRecebida": 50,
       "qtdDefeito": 0
     },
     {
-      "tamanhoId": "uuid-tamanho-M",
+      "direcionamentoItemId": "uuid-direcionamento-item-M-branco",
       "qtdRecebida": 95,
       "qtdDefeito": 5
     }
@@ -904,22 +900,19 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "direcionamentoId": "uuid-direcionamento",
-  "responsavelId": "uuid-usuario",
-  "dataConferencia": "2026-02-10",
   "statusQualidade": "com_defeito",
   "liberadoPagamento": false,
   "observacao": "Encontrado defeitos na costura",
   "items": [
     {
-      "tamanhoId": "uuid-tamanho-P",
+      "direcionamentoItemId": "uuid-direcionamento-item-P-preto",
       "qtdRecebida": 50,
       "qtdDefeito": 0
     }
   ]
 }
 ```
-Obs: Todos os campos são opcionais.
+Obs: Todos os campos sao opcionais.
 
 **Regra de Negócio:**
 - Não é possível liberar pagamento para conferências não conforme
@@ -931,34 +924,6 @@ Obs: Todos os campos são opcionais.
 ```http
 GET /conferencias/relatorio/produtividade?dataInicio=2026-01-01&dataFim=2026-02-03
 Authorization: Bearer <token>
-```
-
-**Resposta:**
-```json
-{
-  "periodo": {
-    "inicio": "2026-01-01",
-    "fim": "2026-02-03"
-  },
-  "totalConferencias": 120,
-  "conformes": 110,
-  "naoConformes": 5,
-  "comDefeito": 5,
-  "taxaConformidade": "91.67%",
-  "pagasAutorizadas": 110,
-  "porFaccao": {
-    "Facção Premium Costura": {
-      "total": 50,
-      "conforme": 48,
-      "defeitos": 2
-    },
-    "Facção Acabamento": {
-      "total": 70,
-      "conforme": 62,
-      "defeitos": 3
-    }
-  }
-}
 ```
 
 ---
@@ -1005,19 +970,22 @@ Authorization: Bearer <token>
 12.1. Adicionar Itens ao Lote (quando necessário)
   POST /lotes-producao/:id/items { enfestos[].itens[].qtdMultiplicadorGrade }
 
-13. Criar Direcionamento para Facção
-    POST /direcionamentos { loteProducaoId, faccaoId, tipoServico, ... }
+13. Consultar Estoque de Corte disponivel
+  GET /estoque-corte?loteProducaoId=...
 
-14. Atualizar Status (em_processamento)
+14. Criar Direcionamento para Facção
+  POST /direcionamentos { direcionamentos:[{ faccaoId, tipoServico, items:[{ estoqueCorteId, quantidade }] }] }
+
+15. Atualizar Status (em_processamento)
     PUT /direcionamentos/:id { status: "em_processamento" }
 
-15. Criar Conferência de Retorno
-    POST /conferencias { direcionamentoId, responsavelId, items, ... }
+16. Criar Conferência de Retorno
+  POST /conferencias { direcionamentoId, responsavelId, items:[{ direcionamentoItemId, qtdRecebida, qtdDefeito }], ... }
 
-16. Atualizar Conferência (liberar pagamento)
+17. Atualizar Conferência (liberar pagamento)
     PUT /conferencias/:id { liberadoPagamento: true, ... }
 
-17. Consultar Relatório de Produtividade
+18. Consultar Relatório de Produtividade
     GET /conferencias/relatorio/produtividade?dataInicio=...&dataFim=...
 ```
 

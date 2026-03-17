@@ -1,12 +1,8 @@
 import prismaClient from "../../prisma";
 import { IGradeSobraResponse } from "../../interfaces/IProducao";
 
-/**
- * Service para listar grades de sobra de um lote
- */
 class ListarGradesSobraService {
     async execute(loteProducaoId: string): Promise<IGradeSobraResponse> {
-        // Buscar lote
         const lote = await prismaClient.loteProducao.findUnique({
             where: { id: loteProducaoId },
             include: {
@@ -16,60 +12,52 @@ class ListarGradesSobraService {
                         tamanho: true
                     }
                 },
-                direcionamentos: {
+                estoqueCorte: {
                     include: {
-                        items: true
+                        produto: true,
+                        tamanho: true
                     }
                 }
             }
         });
 
         if (!lote) {
-            throw new Error("Lote não encontrado.");
+            throw new Error("Lote nao encontrado.");
         }
 
-        // Buscar grades de sobra
-        const gradessobra = await prismaClient.gradeSobra.findMany({
-            where: { loteProducaoId },
-            include: {
-                produto: true,
-                tamanho: true
-            }
-        });
+        const planejadoPorProdutoTamanho = new Map<string, number>();
+        for (const loteItem of lote.items) {
+            const key = `${loteItem.produtoId}|${loteItem.tamanhoId}`;
+            const atual = planejadoPorProdutoTamanho.get(key) ?? 0;
+            planejadoPorProdutoTamanho.set(key, atual + loteItem.quantidadePlanejada);
+        }
 
-        // Montar resposta com detalhes
-        const items = lote.items.map(loteItem => {
-            // Somar quantidade direcionada deste produto/tamanho
-            let quantidadeDirecionada = 0;
-            for (const direcionamento of lote.direcionamentos) {
-                const dirItem = direcionamento.items.find(
-                    di => di.produtoId === loteItem.produtoId && di.tamanhoId === loteItem.tamanhoId
-                );
-                if (dirItem) {
-                    quantidadeDirecionada += dirItem.quantidade;
-                }
-            }
+        const items = lote.estoqueCorte
+            .filter((estoque) => estoque.quantidadeDisponivel > 0)
+            .map((estoque) => {
+                const key = `${estoque.produtoId}|${estoque.tamanhoId}`;
+                const quantidadePlanejada = planejadoPorProdutoTamanho.get(key) ?? 0;
+                const quantidadeSobra = estoque.quantidadeDisponivel;
+                const quantidadeDirecionada = Math.max(0, quantidadePlanejada - quantidadeSobra);
 
-            const sobra = gradessobra.find(
-                gs => gs.produtoId === loteItem.produtoId && gs.tamanhoId === loteItem.tamanhoId
-            );
-
-            return {
-                produtoId: loteItem.produtoId,
-                tamanhoId: loteItem.tamanhoId,
-                produtoNome: loteItem.produto.nome,
-                sku: loteItem.produto.sku,
-                tamanhoNome: loteItem.tamanho.nome,
-                quantidadePlanejada: loteItem.quantidadePlanejada,
-                quantidadeDirecionada,
-                quantidadeSobra: sobra?.quantidadeSobra || 0
-            };
-        });
+                return {
+                    estoqueCorteId: estoque.id,
+                    produtoId: estoque.produtoId,
+                    tamanhoId: estoque.tamanhoId,
+                    produtoNome: estoque.produto.nome,
+                    sku: estoque.produto.sku,
+                    tamanhoNome: estoque.tamanho.nome,
+                    quantidadePlanejada,
+                    quantidadeDirecionada,
+                    quantidadeSobra,
+                    quantidadeDisponivel: estoque.quantidadeDisponivel
+                };
+            });
 
         return {
             loteId: lote.id,
             codigoLote: lote.codigoLote,
-            items: items.filter(item => item.quantidadeSobra > 0)
+            items
         };
     }
 }

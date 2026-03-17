@@ -61,7 +61,17 @@ class ListByIdFaccaoService {
             include: {
                 direcionamentos: {
                     include: {
-                        lote: true,
+                        items: {
+                            include: {
+                                estoqueCorte: {
+                                    include: {
+                                        lote: true,
+                                        produto: true,
+                                        tamanho: true
+                                    }
+                                }
+                            }
+                        },
                         conferencias: true
                     }
                 }

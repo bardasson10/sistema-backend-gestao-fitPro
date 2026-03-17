@@ -44,3 +44,21 @@ export const listMovimentacaoSchema = z.object({
         dataFim: z.date().optional(),
     }),
 });
+
+export const listEstoqueCorteSchema = z.object({
+    query: z.object({
+        produtoId: z.uuid("ID de produto invalido").optional(),
+        loteProducaoId: z.uuid("ID de lote invalido").optional(),
+        tamanhoId: z.uuid("ID de tamanho invalido").optional(),
+    }),
+});
+
+export const ajusteEstoqueCorteSchema = z.object({
+    body: z.object({
+        novaQuantidade: z.number().int().nonnegative("Nova quantidade nao pode ser negativa"),
+        motivo: z.string().min(3, "Motivo deve ter pelo menos 3 caracteres"),
+    }),
+    params: z.object({
+        id: z.uuid("ID invalido"),
+    }),
+});

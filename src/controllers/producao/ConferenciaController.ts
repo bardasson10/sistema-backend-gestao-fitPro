@@ -3,13 +3,14 @@ import { CreateConferenciaService, ListAllConferenciaService, ListByIdConferenci
 
 class CreateConferenciaController {
     async handle(req: Request, res: Response) {
-        const { direcionamentoId, responsavelId, dataConferencia, statusQualidade, observacao, items } = req.body;
+        const { direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items } = req.body;
 
         const conferencia = await new CreateConferenciaService().execute({
             direcionamentoId,
             responsavelId,
             dataConferencia,
             statusQualidade,
+            liberadoPagamento,
             observacao,
             items
         });

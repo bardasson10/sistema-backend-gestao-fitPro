@@ -104,15 +104,13 @@ export const addLoteItemsSchema = z.object({
 
 export const createDirecionamentoSchema = z.object({
     body: z.object({
-        loteProducaoId: z.uuid("ID de lote inválido"),
         direcionamentos: z.array(z.object({
             faccaoId: z.uuid("ID de facção inválido"),
             tipoServico: z.enum(["costura", "estampa", "tingimento", "acabamento", "corte", "outro"]),
             dataSaida: z.coerce.date().optional(),
             dataPrevisaoRetorno: z.coerce.date().optional(),
             items: z.array(z.object({
-                produtoId: z.uuid("ID de produto inválido"),
-                tamanhoId: z.uuid("ID de tamanho inválido"),
+                estoqueCorteId: z.uuid("ID de estoque de corte inválido"),
                 quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
             })).min(1, "Informe ao menos um item por direcionamento."),
         })).min(1, "Informe ao menos um direcionamento."),
@@ -137,7 +135,7 @@ export const createConferenciaSchema = z.object({
         liberadoPagamento: z.boolean().optional(),
         observacao: z.string().optional(),
         items: z.array(z.object({
-            tamanhoId: z.uuid("ID de tamanho inválido"),
+            direcionamentoItemId: z.uuid("ID de item do direcionamento inválido"),
             qtdRecebida: z.number().int().positive("Quantidade deve ser positiva"),
             qtdDefeito: z.number().int().nonnegative("Defeitos não podem ser negativos").optional(),
         })).optional(),
@@ -153,7 +151,7 @@ export const updateConferenciaSchema = z.object({
         liberadoPagamento: z.boolean().optional(),
         observacao: z.string().optional(),
         items: z.array(z.object({
-            tamanhoId: z.uuid("ID de tamanho inválido"),
+            direcionamentoItemId: z.uuid("ID de item do direcionamento inválido"),
             qtdRecebida: z.number().int().positive("Quantidade deve ser positiva"),
             qtdDefeito: z.number().int().nonnegative("Defeitos não podem ser negativos").optional(),
         })).optional(),

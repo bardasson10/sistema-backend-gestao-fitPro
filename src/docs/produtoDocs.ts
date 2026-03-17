@@ -14,6 +14,108 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 
 extendZodWithOpenApi(z);
 
+const errorSchema = z.object({
+    error: z.string()
+});
+
+const messageSchema = z.object({
+    message: z.string()
+});
+
+const tamanhoSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    ordem: z.number().int().optional(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional()
+});
+
+const tipoProdutoTamanhoFormatadoSchema = z.object({
+    id: z.string().uuid(),
+    tamanhoId: z.string().uuid(),
+    NomeTamanho: z.string(),
+    OrdemTamanho: z.number().int().optional()
+});
+
+const tipoProdutoSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+    tamanhos: z.array(tipoProdutoTamanhoFormatadoSchema).optional()
+});
+
+const produtoSchema = z.object({
+    id: z.string().uuid(),
+    tipoProdutoId: z.string().uuid(),
+    nome: z.string(),
+    sku: z.string(),
+    fabricante: z.string().nullable().optional(),
+    custoMedioPeca: z.number().nullable().optional(),
+    precoMedioVenda: z.number().nullable().optional(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+    tipo: z.object({
+        id: z.string().uuid(),
+        nome: z.string(),
+        createdAt: z.string().datetime().optional(),
+        updatedAt: z.string().datetime().optional(),
+        tamanhos: z.array(z.object({
+            id: z.string().uuid(),
+            tipoProdutoId: z.string().uuid(),
+            tamanhoId: z.string().uuid(),
+            tamanho: tamanhoSchema
+        })).optional()
+    }).optional()
+});
+
+const tipoProdutoTamanhoAssociationSchema = z.object({
+    id: z.string().uuid(),
+    tipoProdutoId: z.string().uuid(),
+    tamanhoId: z.string().uuid(),
+    tipo: z.object({
+        id: z.string().uuid(),
+        nome: z.string()
+    }),
+    tamanho: tamanhoSchema
+});
+
+const createTipoProdutoTamanhoResponseSchema = z.object({
+    message: z.string(),
+    criados: z.array(tipoProdutoTamanhoAssociationSchema),
+    erros: z.array(z.string()).optional()
+});
+
+const deleteTipoProdutoTamanhoResponseSchema = z.object({
+    message: z.string(),
+    removidos: z.array(tipoProdutoTamanhoAssociationSchema),
+    erros: z.array(z.string()).optional()
+});
+
+const paginatedTipoProdutoSchema = z.object({
+    data: z.array(tipoProdutoSchema),
+    total: z.number().int(),
+    page: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int()
+});
+
+const paginatedTamanhoSchema = z.object({
+    data: z.array(tamanhoSchema),
+    total: z.number().int(),
+    page: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int()
+});
+
+const paginatedProdutoSchema = z.object({
+    data: z.array(produtoSchema),
+    total: z.number().int(),
+    page: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int()
+});
+
 export function registerProdutoRoutes(registry: OpenAPIRegistry) {
     // POST /tipos-produto - Criar tipo de produto
     registry.registerPath({
@@ -36,12 +138,17 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
                 description: 'Tipo de produto criado com sucesso',
                 content: {
                     'application/json': {
-                        schema: createTipoProdutoSchema
+                        schema: tipoProdutoSchema
                     }
                 }
             },
             400: {
-                description: 'Erro de validação'
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -55,7 +162,12 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Lista de tipos de produto'
+                description: 'Lista de tipos de produto',
+                content: {
+                    'application/json': {
+                        schema: paginatedTipoProdutoSchema
+                    }
+                }
             }
         }
     });
@@ -74,10 +186,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Tipo de produto encontrado'
+                description: 'Tipo de produto encontrado',
+                content: {
+                    'application/json': {
+                        schema: tipoProdutoSchema
+                    }
+                }
             },
             404: {
-                description: 'Tipo de produto não encontrado'
+                description: 'Tipo de produto não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -103,10 +225,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Tipo de produto atualizado'
+                description: 'Tipo de produto atualizado',
+                content: {
+                    'application/json': {
+                        schema: tipoProdutoSchema
+                    }
+                }
             },
             404: {
-                description: 'Tipo de produto não encontrado'
+                description: 'Tipo de produto não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -125,10 +257,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Tipo de produto deletado'
+                description: 'Tipo de produto deletado',
+                content: {
+                    'application/json': {
+                        schema: messageSchema
+                    }
+                }
             },
             404: {
-                description: 'Tipo de produto não encontrado'
+                description: 'Tipo de produto não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -151,10 +293,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Tamanho criado com sucesso'
+                description: 'Tamanho criado com sucesso',
+                content: {
+                    'application/json': {
+                        schema: tamanhoSchema
+                    }
+                }
             },
             400: {
-                description: 'Erro de validação'
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -168,7 +320,12 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Lista de tamanhos'
+                description: 'Lista de tamanhos',
+                content: {
+                    'application/json': {
+                        schema: paginatedTamanhoSchema
+                    }
+                }
             }
         }
     });
@@ -187,10 +344,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Tamanho encontrado'
+                description: 'Tamanho encontrado',
+                content: {
+                    'application/json': {
+                        schema: tamanhoSchema
+                    }
+                }
             },
             404: {
-                description: 'Tamanho não encontrado'
+                description: 'Tamanho não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -216,10 +383,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Tamanho atualizado'
+                description: 'Tamanho atualizado',
+                content: {
+                    'application/json': {
+                        schema: tamanhoSchema
+                    }
+                }
             },
             404: {
-                description: 'Tamanho não encontrado'
+                description: 'Tamanho não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -238,10 +415,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Tamanho deletado'
+                description: 'Tamanho deletado',
+                content: {
+                    'application/json': {
+                        schema: messageSchema
+                    }
+                }
             },
             404: {
-                description: 'Tamanho não encontrado'
+                description: 'Tamanho não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -264,10 +451,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Produto criado com sucesso'
+                description: 'Produto criado com sucesso',
+                content: {
+                    'application/json': {
+                        schema: produtoSchema
+                    }
+                }
             },
             400: {
-                description: 'Erro de validação'
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -281,7 +478,12 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Lista de produtos'
+                description: 'Lista de produtos',
+                content: {
+                    'application/json': {
+                        schema: paginatedProdutoSchema
+                    }
+                }
             }
         }
     });
@@ -300,10 +502,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Produto encontrado'
+                description: 'Produto encontrado',
+                content: {
+                    'application/json': {
+                        schema: produtoSchema
+                    }
+                }
             },
             404: {
-                description: 'Produto não encontrado'
+                description: 'Produto não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -329,10 +541,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Produto atualizado'
+                description: 'Produto atualizado',
+                content: {
+                    'application/json': {
+                        schema: produtoSchema
+                    }
+                }
             },
             404: {
-                description: 'Produto não encontrado'
+                description: 'Produto não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -351,10 +573,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Produto deletado'
+                description: 'Produto deletado',
+                content: {
+                    'application/json': {
+                        schema: messageSchema
+                    }
+                }
             },
             404: {
-                description: 'Produto não encontrado'
+                description: 'Produto não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -377,10 +609,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Associação criada com sucesso'
+                description: 'Associação criada com sucesso',
+                content: {
+                    'application/json': {
+                        schema: createTipoProdutoTamanhoResponseSchema
+                    }
+                }
             },
             400: {
-                description: 'Erro de validação'
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -399,10 +641,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Lista de tamanhos do tipo de produto'
+                description: 'Lista de tamanhos do tipo de produto',
+                content: {
+                    'application/json': {
+                        schema: z.array(tipoProdutoTamanhoAssociationSchema)
+                    }
+                }
             },
             404: {
-                description: 'Tipo de produto não encontrado'
+                description: 'Tipo de produto não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -428,10 +680,20 @@ export function registerProdutoRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Desassociação concluída'
+                description: 'Desassociação concluída',
+                content: {
+                    'application/json': {
+                        schema: deleteTipoProdutoTamanhoResponseSchema
+                    }
+                }
             },
             404: {
-                description: 'Tipo de produto ou associação não encontrada'
+                description: 'Tipo de produto ou associação não encontrada',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });

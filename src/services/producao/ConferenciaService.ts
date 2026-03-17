@@ -2,6 +2,53 @@ import { ICreateConferenciaRequest, IUpdateConferenciaRequest } from "../../inte
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
+const conferenciaDirecionamentoInclude = {
+    faccao: true,
+    items: {
+        include: {
+            estoqueCorte: {
+                include: {
+                    lote: true,
+                    produto: true,
+                    tamanho: true
+                }
+            }
+        }
+    }
+} as const;
+
+const conferenciaItemsInclude = {
+    direcionamentoItem: {
+        include: {
+            estoqueCorte: {
+                include: {
+                    lote: true,
+                    produto: true,
+                    tamanho: true
+                }
+            }
+        }
+    }
+} as const;
+
+function enrichConferenciaItems<T extends { items?: Array<any> }>(conferencia: T) {
+    const items = (conferencia.items ?? []).map((item) => {
+        const quantidadeEnviada = item.direcionamentoItem?.quantidade ?? 0;
+        const quebra = quantidadeEnviada - (item.qtdRecebida + item.qtdDefeito);
+
+        return {
+            ...item,
+            quantidadeEnviada,
+            quebra
+        };
+    });
+
+    return {
+        ...conferencia,
+        items
+    };
+}
+
 class CreateConferenciaService {
     async execute({ direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items }: ICreateConferenciaRequest) {
         // Verificar se direcionamento existe
@@ -20,6 +67,21 @@ class CreateConferenciaService {
 
         if (!responsavel) {
             throw new Error("Responsável não encontrado.");
+        }
+
+        if (items?.length) {
+            const direcionamentoItemIds = [...new Set(items.map(item => item.direcionamentoItemId))];
+            const itensDirecionamento = await prismaClient.direcionamentoItem.findMany({
+                where: {
+                    id: { in: direcionamentoItemIds },
+                    direcionamentoId
+                },
+                select: { id: true }
+            });
+
+            if (itensDirecionamento.length !== direcionamentoItemIds.length) {
+                throw new Error("Um ou mais itens não pertencem ao direcionamento informado.");
+            }
         }
 
         // Validar regra: só pode liberar pagamento se statusQualidade for "conforme"
@@ -41,7 +103,7 @@ class CreateConferenciaService {
                 liberadoPagamento: liberadoFinal,
                 items: items ? {
                     create: items.map(item => ({
-                        tamanhoId: item.tamanhoId,
+                        direcionamentoItemId: item.direcionamentoItemId,
                         qtdRecebida: item.qtdRecebida,
                         qtdDefeito: item.qtdDefeito || 0
                     }))
@@ -49,21 +111,16 @@ class CreateConferenciaService {
             },
             include: {
                 direcionamento: {
-                    include: {
-                        lote: true,
-                        faccao: true
-                    }
+                    include: conferenciaDirecionamentoInclude
                 },
                 responsavel: true,
                 items: {
-                    include: {
-                        tamanho: true
-                    }
+                    include: conferenciaItemsInclude
                 }
             }
         });
 
-        return conferencia;
+        return enrichConferenciaItems(conferencia);
     }
 }
 
@@ -99,16 +156,11 @@ class ListAllConferenciaService {
                 where: whereCondition,
                 include: {
                     direcionamento: {
-                        include: {
-                            lote: true,
-                            faccao: true
-                        }
+                        include: conferenciaDirecionamentoInclude
                     },
                     responsavel: true,
                     items: {
-                        include: {
-                            tamanho: true
-                        }
+                        include: conferenciaItemsInclude
                     }
                 },
                 skip,
@@ -125,7 +177,8 @@ class ListAllConferenciaService {
             })
         ]);
 
-        return createPaginatedResponse(conferencias, total, pageNumber, pageLimit);
+        const conferenciasComQuebra = conferencias.map(enrichConferenciaItems);
+        return createPaginatedResponse(conferenciasComQuebra, total, pageNumber, pageLimit);
     }
 }
 
@@ -135,26 +188,11 @@ class ListByIdConferenciaService {
             where: { id },
             include: {
                 direcionamento: {
-                    include: {
-                        lote: {
-                            include: {
-                                tecido: true,
-                                items: {
-                                    include: {
-                                        produto: true,
-                                        tamanho: true
-                                    }
-                                }
-                            }
-                        },
-                        faccao: true
-                    }
+                    include: conferenciaDirecionamentoInclude
                 },
                 responsavel: true,
                 items: {
-                    include: {
-                        tamanho: true
-                    }
+                    include: conferenciaItemsInclude
                 }
             }
         });
@@ -163,7 +201,7 @@ class ListByIdConferenciaService {
             throw new Error("Conferência não encontrada.");
         }
 
-        return conferencia;
+        return enrichConferenciaItems(conferencia);
     }
 }
 
@@ -202,6 +240,20 @@ class UpdateConferenciaService {
             }
 
             if (items) {
+                const direcionamentoAlvoId = direcionamentoId ?? conferencia.direcionamentoId;
+                const direcionamentoItemIds = [...new Set(items.map(item => item.direcionamentoItemId))];
+                const itensDirecionamento = await tx.direcionamentoItem.findMany({
+                    where: {
+                        id: { in: direcionamentoItemIds },
+                        direcionamentoId: direcionamentoAlvoId
+                    },
+                    select: { id: true }
+                });
+
+                if (itensDirecionamento.length !== direcionamentoItemIds.length) {
+                    throw new Error("Um ou mais itens não pertencem ao direcionamento informado.");
+                }
+
                 await tx.conferenciaItem.deleteMany({
                     where: { conferenciaId: id }
                 });
@@ -210,7 +262,7 @@ class UpdateConferenciaService {
                     await tx.conferenciaItem.createMany({
                         data: items.map(item => ({
                             conferenciaId: id,
-                            tamanhoId: item.tamanhoId,
+                            direcionamentoItemId: item.direcionamentoItemId,
                             qtdRecebida: item.qtdRecebida,
                             qtdDefeito: item.qtdDefeito || 0
                         }))
@@ -230,22 +282,17 @@ class UpdateConferenciaService {
                 },
                 include: {
                     direcionamento: {
-                        include: {
-                            lote: true,
-                            faccao: true
-                        }
+                        include: conferenciaDirecionamentoInclude
                     },
                     responsavel: true,
                     items: {
-                        include: {
-                            tamanho: true
-                        }
+                        include: conferenciaItemsInclude
                     }
                 }
             });
         });
 
-        return conferenciaAtualizada;
+        return enrichConferenciaItems(conferenciaAtualizada);
     }
 }
 

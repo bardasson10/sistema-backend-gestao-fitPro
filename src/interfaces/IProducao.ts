@@ -96,21 +96,19 @@ export interface ILoteProducaoResponse {
 
 // Direcionamento
 export interface IDirecionamentoItemInput {
-    produtoId: string;
-    tamanhoId: string;
+    estoqueCorteId: string;
     quantidade: number;
 }
 
 export interface IDirecionamentoInput {
     faccaoId: string;
     tipoServico: "costura" | "estampa" | "tingimento" | "acabamento" | "corte" | "outro";
-    items: IDirecionamentoItemInput[]; // Granular por produto/tamanho
+    items: IDirecionamentoItemInput[];
     dataSaida?: Date;
     dataPrevisaoRetorno?: Date;
 }
 
 export interface ICreateDirecionamentoRequest {
-    loteProducaoId: string;
     direcionamentos: IDirecionamentoInput[];
 }
 
@@ -120,6 +118,7 @@ export interface IUpdateDirecionamentoRequest {
 
 // Grade Sobra - Rastreamento de itens não direcionados
 export interface IGradeSobraItem {
+    estoqueCorteId: string;
     produtoId: string;
     tamanhoId: string;
     produtoNome: string;
@@ -128,6 +127,7 @@ export interface IGradeSobraItem {
     quantidadePlanejada: number;
     quantidadeDirecionada: number;
     quantidadeSobra: number;
+    quantidadeDisponivel: number;
 }
 
 export interface IGradeSobraResponse {
@@ -138,7 +138,7 @@ export interface IGradeSobraResponse {
 
 // Conferencia
 export interface IConferenciaItemInput {
-    tamanhoId: string;
+    direcionamentoItemId: string;
     qtdRecebida: number;
     qtdDefeito?: number;
 }

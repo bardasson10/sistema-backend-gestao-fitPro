@@ -4,9 +4,8 @@ import { ListarGradesSobraService } from "../../services/producao/ListarGradesSo
 
 class CreateDirecionamentoController {
     async handle(req: Request, res: Response) {
-        const { loteProducaoId, direcionamentos } = req.body;
+        const { direcionamentos } = req.body;
         const direcionamento = await new CreateDirecionamentoService().execute({
-            loteProducaoId,
             direcionamentos
         });
         return res.status(201).json(direcionamento);

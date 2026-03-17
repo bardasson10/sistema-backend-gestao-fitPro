@@ -4,6 +4,17 @@
 **Status**: ✅ COMPLETO E PRONTO PARA USO  
 **Total de Endpoints**: 134 endpoints implementados
 
+## Atualizações de Março/2026
+
+- Novo modulo operacional de `EstoqueCorte` com 3 endpoints:
+  - `GET /estoque-corte`
+  - `GET /estoque-corte/:id`
+  - `PATCH /estoque-corte/:id/ajuste` (ADM/GERENTE)
+- Direcionamento migrado para consumo por `estoqueCorteId` (sem `loteProducaoId` no payload de criacao).
+- ConferenciaItem migrado para `direcionamentoItemId` (rastreio completo por origem).
+- Retorno da conferencia agora inclui campo derivado por item: `quebra = quantidadeEnviada - (qtdRecebida + qtdDefeito)`.
+- Swagger reorganizado por subgrupos em producao e com schemas de resposta no modulo de estoque.
+
 ---
 
 ## 📊 Estatísticas da Implementação

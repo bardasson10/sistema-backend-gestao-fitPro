@@ -51,6 +51,9 @@ export const swaggerSpec = generator.generateDocument({
         { name: 'Produtos', description: 'Gestão de tipos de produto, tamanhos e produtos' },
         { name: 'Materiais', description: 'Gestão de fornecedores, cores e tecidos' },
         { name: 'Estoque', description: 'Controle de rolos de tecido e movimentações' },
-        { name: 'Produção', description: 'Gestão de lotes, direcionamentos e conferências' }
+        { name: 'Produção - Facções', description: 'Cadastro e gestão das facções parceiras' },
+        { name: 'Produção - Lotes', description: 'Fluxo de lotes de produção e estoque de corte por lote' },
+        { name: 'Produção - Direcionamentos', description: 'Remessas para facções a partir do estoque de corte' },
+        { name: 'Produção - Conferências', description: 'Conferência de retorno e qualidade das remessas' }
     ]
 });

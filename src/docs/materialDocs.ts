@@ -12,6 +12,89 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 
 extendZodWithOpenApi(z);
 
+const errorSchema = z.object({
+    error: z.string()
+});
+
+const messageSchema = z.object({
+    message: z.string()
+});
+
+const tecidoResumoSchema = z.object({
+    id: z.string().uuid(),
+    fornecedorId: z.string().uuid().optional(),
+    corId: z.string().uuid().optional(),
+    nome: z.string(),
+    codigoReferencia: z.string().nullable().optional(),
+    rendimentoMetroKg: z.number().nullable().optional(),
+    larguraMetros: z.number().nullable().optional(),
+    valorPorKg: z.number().nullable().optional(),
+    gramatura: z.number().nullable().optional(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional()
+});
+
+const fornecedorSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    tipo: z.string().nullable().optional(),
+    contato: z.string().nullable().optional(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+    tecidos: z.array(tecidoResumoSchema).optional()
+});
+
+const corSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    codigoHex: z.string().nullable().optional(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+    tecidos: z.array(tecidoResumoSchema).optional()
+});
+
+const tecidoSchema = z.object({
+    id: z.string().uuid(),
+    fornecedorId: z.string().uuid(),
+    corId: z.string().uuid(),
+    nome: z.string(),
+    codigoReferencia: z.string(),
+    rendimentoMetroKg: z.number().nullable().optional(),
+    larguraMetros: z.number().nullable().optional(),
+    valorPorKg: z.number().nullable().optional(),
+    gramatura: z.number().nullable().optional(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+    fornecedor: fornecedorSchema.optional(),
+    cor: corSchema.optional(),
+    rolos: z.array(z.any()).optional(),
+    lotes: z.array(z.any()).optional()
+});
+
+const paginatedFornecedoresSchema = z.object({
+    data: z.array(fornecedorSchema),
+    total: z.number().int(),
+    page: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int()
+});
+
+const paginatedCoresSchema = z.object({
+    data: z.array(corSchema),
+    total: z.number().int(),
+    page: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int()
+});
+
+const paginatedTecidosSchema = z.object({
+    data: z.array(tecidoSchema),
+    total: z.number().int(),
+    page: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int()
+});
+
 export function registerMaterialRoutes(registry: OpenAPIRegistry) {
     // POST /fornecedores - Criar fornecedor
     registry.registerPath({
@@ -31,10 +114,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Fornecedor criado com sucesso'
+                description: 'Fornecedor criado com sucesso',
+                content: {
+                    'application/json': {
+                        schema: fornecedorSchema
+                    }
+                }
             },
             400: {
-                description: 'Erro de validação'
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -48,7 +141,12 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Lista de fornecedores'
+                description: 'Lista de fornecedores',
+                content: {
+                    'application/json': {
+                        schema: paginatedFornecedoresSchema
+                    }
+                }
             }
         }
     });
@@ -67,10 +165,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Fornecedor encontrado'
+                description: 'Fornecedor encontrado',
+                content: {
+                    'application/json': {
+                        schema: fornecedorSchema
+                    }
+                }
             },
             404: {
-                description: 'Fornecedor não encontrado'
+                description: 'Fornecedor não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -96,10 +204,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Fornecedor atualizado'
+                description: 'Fornecedor atualizado',
+                content: {
+                    'application/json': {
+                        schema: fornecedorSchema
+                    }
+                }
             },
             404: {
-                description: 'Fornecedor não encontrado'
+                description: 'Fornecedor não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -118,10 +236,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Fornecedor deletado'
+                description: 'Fornecedor deletado',
+                content: {
+                    'application/json': {
+                        schema: messageSchema
+                    }
+                }
             },
             404: {
-                description: 'Fornecedor não encontrado'
+                description: 'Fornecedor não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -144,10 +272,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Cor criada com sucesso'
+                description: 'Cor criada com sucesso',
+                content: {
+                    'application/json': {
+                        schema: corSchema
+                    }
+                }
             },
             400: {
-                description: 'Erro de validação'
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -161,7 +299,12 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Lista de cores'
+                description: 'Lista de cores',
+                content: {
+                    'application/json': {
+                        schema: paginatedCoresSchema
+                    }
+                }
             }
         }
     });
@@ -180,10 +323,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Cor encontrada'
+                description: 'Cor encontrada',
+                content: {
+                    'application/json': {
+                        schema: corSchema
+                    }
+                }
             },
             404: {
-                description: 'Cor não encontrada'
+                description: 'Cor não encontrada',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -209,10 +362,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Cor atualizada'
+                description: 'Cor atualizada',
+                content: {
+                    'application/json': {
+                        schema: corSchema
+                    }
+                }
             },
             404: {
-                description: 'Cor não encontrada'
+                description: 'Cor não encontrada',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -231,10 +394,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Cor deletada'
+                description: 'Cor deletada',
+                content: {
+                    'application/json': {
+                        schema: messageSchema
+                    }
+                }
             },
             404: {
-                description: 'Cor não encontrada'
+                description: 'Cor não encontrada',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -257,10 +430,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Tecido criado com sucesso'
+                description: 'Tecido criado com sucesso',
+                content: {
+                    'application/json': {
+                        schema: tecidoSchema
+                    }
+                }
             },
             400: {
-                description: 'Erro de validação'
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -274,7 +457,12 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Lista de tecidos'
+                description: 'Lista de tecidos',
+                content: {
+                    'application/json': {
+                        schema: paginatedTecidosSchema
+                    }
+                }
             }
         }
     });
@@ -293,10 +481,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Tecido encontrado'
+                description: 'Tecido encontrado',
+                content: {
+                    'application/json': {
+                        schema: tecidoSchema
+                    }
+                }
             },
             404: {
-                description: 'Tecido não encontrado'
+                description: 'Tecido não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -322,10 +520,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Tecido atualizado'
+                description: 'Tecido atualizado',
+                content: {
+                    'application/json': {
+                        schema: tecidoSchema
+                    }
+                }
             },
             404: {
-                description: 'Tecido não encontrado'
+                description: 'Tecido não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });
@@ -344,10 +552,20 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Tecido deletado'
+                description: 'Tecido deletado',
+                content: {
+                    'application/json': {
+                        schema: messageSchema
+                    }
+                }
             },
             404: {
-                description: 'Tecido não encontrado'
+                description: 'Tecido não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
             }
         }
     });

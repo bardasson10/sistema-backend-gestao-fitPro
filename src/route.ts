@@ -2,6 +2,7 @@ import { Router } from "express";
 import { validateSchema } from "./middlewares/validateSchema";
 import { isAuthenticated } from "./middlewares/isAuthenticated";
 import { isAdmin } from "./middlewares/IsAdmin";
+import { isManagerOrAdmin } from "./middlewares/IsManagerOrAdmin";
 
 // User Controllers
 import { CreateUserController } from "./controllers/user/CreateUserController";
@@ -28,7 +29,8 @@ import { createFornecedorSchema, updateFornecedorSchema, createCorSchema, update
 // Estoque Controllers
 import { CreateEstoqueRoloController, ListAllEstoqueRoloController, ListByIdEstoqueRoloController, UpdateEstoqueRoloController, DeleteEstoqueRoloController, GetRelatorioEstoqueController } from "./controllers/estoque/EstoqueRoloController";
 import { CreateMovimentacaoEstoqueController, ListAllMovimentacaoEstoqueController, ListByIdMovimentacaoEstoqueController, GetHistoricoRoloController } from "./controllers/estoque/MovimentacaoEstoqueController";
-import { createEstoqueRoloSchema, updateEstoqueRoloSchema, createMovimentacaoEstoqueSchema } from "./schemas/estoqueSchemas";
+import { ListAllEstoqueCorteController, ListByIdEstoqueCorteController, AjusteEstoqueCorteController } from "./controllers/estoque/EstoqueCorteController";
+import { createEstoqueRoloSchema, updateEstoqueRoloSchema, createMovimentacaoEstoqueSchema, listEstoqueCorteSchema, ajusteEstoqueCorteSchema } from "./schemas/estoqueSchemas";
 
 // Produção Controllers
 import { CreateFaccaoController, ListAllFaccaoController, ListByIdFaccaoController, UpdateFaccaoController, DeleteFaccaoController } from "./controllers/producao/FaccaoController";
@@ -109,6 +111,11 @@ router.post("/movimentacoes-estoque", isAuthenticated, validateSchema(createMovi
 router.get("/movimentacoes-estoque", isAuthenticated, new ListAllMovimentacaoEstoqueController().handle);
 router.get("/movimentacoes-estoque/:id", isAuthenticated, new ListByIdMovimentacaoEstoqueController().handle);
 router.get("/movimentacoes-estoque/:estoqueRoloId/historico", isAuthenticated, new GetHistoricoRoloController().handle);
+
+// ==================== ESTOQUE DE CORTE ====================
+router.get("/estoque-corte", isAuthenticated, validateSchema(listEstoqueCorteSchema), new ListAllEstoqueCorteController().handle);
+router.get("/estoque-corte/:id", isAuthenticated, new ListByIdEstoqueCorteController().handle);
+router.patch("/estoque-corte/:id/ajuste", isAuthenticated, isManagerOrAdmin, validateSchema(ajusteEstoqueCorteSchema), new AjusteEstoqueCorteController().handle);
 
 // ==================== FACÇÕES ====================
 router.post("/faccoes", isAuthenticated, validateSchema(createFaccaoSchema), new CreateFaccaoController().handle);

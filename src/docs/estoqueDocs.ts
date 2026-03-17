@@ -9,7 +9,200 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 
 extendZodWithOpenApi(z);
 
+const corSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    codigoHex: z.string().nullable().optional()
+});
+
+const tecidoResumoSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    cor: corSchema.nullable().optional()
+});
+
+const produtoResumoSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    sku: z.string()
+});
+
+const tamanhoResumoSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string()
+});
+
+const loteResumoSchema = z.object({
+    id: z.string().uuid(),
+    codigoLote: z.string(),
+    tecido: tecidoResumoSchema
+});
+
+const estoqueCorteListItemSchema = z.object({
+    id: z.string().uuid(),
+    quantidadeDisponivel: z.number().int(),
+    produto: produtoResumoSchema,
+    tamanho: tamanhoResumoSchema,
+    lote: loteResumoSchema
+});
+
+const historicoEnvioSchema = z.object({
+    direcionamentoId: z.string().uuid(),
+    faccao: z.string(),
+    quantidadeEnviada: z.number().int(),
+    dataSaida: z.string().datetime().nullable().optional()
+});
+
+const estoqueCorteDetalheSchema = z.object({
+    id: z.string().uuid(),
+    quantidadeDisponivel: z.number().int(),
+    produto: produtoResumoSchema,
+    tamanho: tamanhoResumoSchema,
+    lote: loteResumoSchema,
+    historicoEnvios: z.array(historicoEnvioSchema)
+});
+
+const ajusteEstoqueCorteResponseSchema = z.object({
+    message: z.string(),
+    motivo: z.string(),
+    usuarioId: z.string().uuid().optional(),
+    quantidadeAnterior: z.number().int(),
+    quantidadeAtual: z.number().int(),
+    item: estoqueCorteListItemSchema
+});
+
+const usuarioResumoSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    funcaoSetor: z.string().nullable().optional(),
+    perfil: z.string()
+});
+
+const movimentacaoSchema = z.object({
+    id: z.string().uuid(),
+    estoqueRoloId: z.string().uuid(),
+    usuarioId: z.string().uuid(),
+    tipoMovimentacao: z.string(),
+    pesoMovimentado: z.number().optional(),
+    createdAt: z.string().datetime(),
+    usuario: usuarioResumoSchema.optional()
+});
+
+const estoqueRoloSchema = z.object({
+    id: z.string().uuid(),
+    tecidoId: z.string().uuid(),
+    codigoBarraRolo: z.string().nullable().optional(),
+    pesoInicialKg: z.number(),
+    pesoAtualKg: z.number(),
+    situacao: z.string(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    tecido: z.any().optional(),
+    movimentacoes: z.array(movimentacaoSchema).optional()
+});
+
+const paginatedEstoqueRoloSchema = z.object({
+    data: z.array(estoqueRoloSchema),
+    total: z.number().int(),
+    page: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int()
+});
+
 export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
+    // GET /estoque-corte - Listar saldo disponivel para remessas
+    registry.registerPath({
+        method: 'get',
+        path: '/estoque-corte',
+        tags: ['Estoque'],
+        summary: 'Listar estoque de corte disponivel',
+        security: [{ bearerAuth: [] }],
+        request: {
+            query: z.object({
+                produtoId: z.uuid().optional(),
+                loteProducaoId: z.uuid().optional(),
+                tamanhoId: z.uuid().optional()
+            })
+        },
+        responses: {
+            200: {
+                description: 'Itens com quantidadeDisponivel maior que zero',
+                content: {
+                    'application/json': {
+                        schema: z.array(estoqueCorteListItemSchema)
+                    }
+                }
+            }
+        }
+    });
+
+    // GET /estoque-corte/{id} - Detalhar item e historico de envios
+    registry.registerPath({
+        method: 'get',
+        path: '/estoque-corte/{id}',
+        tags: ['Estoque'],
+        summary: 'Detalhar item do estoque de corte',
+        security: [{ bearerAuth: [] }],
+        request: {
+            params: z.object({
+                id: z.uuid()
+            })
+        },
+        responses: {
+            200: {
+                description: 'Detalhes do item com historico de remessas',
+                content: {
+                    'application/json': {
+                        schema: estoqueCorteDetalheSchema
+                    }
+                }
+            },
+            404: {
+                description: 'Item não encontrado'
+            }
+        }
+    });
+
+    // PATCH /estoque-corte/{id}/ajuste - Ajuste manual de saldo
+    registry.registerPath({
+        method: 'patch',
+        path: '/estoque-corte/{id}/ajuste',
+        tags: ['Estoque'],
+        summary: 'Ajustar saldo do estoque de corte (ADM/GERENTE)',
+        security: [{ bearerAuth: [] }],
+        request: {
+            params: z.object({
+                id: z.uuid()
+            }),
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            novaQuantidade: z.number().int().nonnegative(),
+                            motivo: z.string().min(3)
+                        })
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                description: 'Saldo ajustado com sucesso',
+                content: {
+                    'application/json': {
+                        schema: ajusteEstoqueCorteResponseSchema
+                    }
+                }
+            },
+            403: {
+                description: 'Usuário sem permissão'
+            },
+            404: {
+                description: 'Item não encontrado'
+            }
+        }
+    });
+
     // POST /estoque-rolos - Criar rolos de estoque em lote
     registry.registerPath({
         method: 'post',
@@ -28,7 +221,15 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             201: {
-                description: 'Rolos de estoque criados com sucesso'
+                description: 'Rolos de estoque criados com sucesso',
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            message: z.string(),
+                            rolos: z.array(estoqueRoloSchema)
+                        })
+                    }
+                }
             },
             400: {
                 description: 'Erro de validação'
@@ -45,7 +246,12 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Lista de rolos de estoque'
+                description: 'Lista de rolos de estoque',
+                content: {
+                    'application/json': {
+                        schema: paginatedEstoqueRoloSchema
+                    }
+                }
             }
         }
     });
@@ -64,7 +270,12 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Rolo de estoque encontrado'
+                description: 'Rolo de estoque encontrado',
+                content: {
+                    'application/json': {
+                        schema: estoqueRoloSchema
+                    }
+                }
             },
             404: {
                 description: 'Rolo de estoque não encontrado'
@@ -93,7 +304,12 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Rolo de estoque atualizado'
+                description: 'Rolo de estoque atualizado',
+                content: {
+                    'application/json': {
+                        schema: estoqueRoloSchema
+                    }
+                }
             },
             404: {
                 description: 'Rolo de estoque não encontrado'
@@ -115,7 +331,14 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Rolo de estoque deletado'
+                description: 'Rolo de estoque deletado',
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            message: z.string()
+                        })
+                    }
+                }
             },
             404: {
                 description: 'Rolo de estoque não encontrado'
@@ -132,7 +355,20 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Relatório do estoque'
+                description: 'Relatório do estoque',
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            totalRolos: z.number().int(),
+                            pesoTotal: z.number(),
+                            tecidoComMaiorEstoque: z.string(),
+                            rolosDisponiveis: z.number().int(),
+                            rolosReservados: z.number().int(),
+                            rolosEmUso: z.number().int(),
+                            movimentacoesMes: z.number().int()
+                        })
+                    }
+                }
             }
         }
     });
@@ -159,7 +395,12 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Movimentação de estoque criada com sucesso'
+                description: 'Movimentação de estoque criada com sucesso',
+                content: {
+                    'application/json': {
+                        schema: movimentacaoSchema
+                    }
+                }
             },
             400: {
                 description: 'Erro de validação'
@@ -176,7 +417,12 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         responses: {
             200: {
-                description: 'Lista de movimentações de estoque'
+                description: 'Lista de movimentações de estoque',
+                content: {
+                    'application/json': {
+                        schema: z.array(movimentacaoSchema)
+                    }
+                }
             }
         }
     });
@@ -195,7 +441,12 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Movimentação de estoque encontrada'
+                description: 'Movimentação de estoque encontrada',
+                content: {
+                    'application/json': {
+                        schema: movimentacaoSchema
+                    }
+                }
             },
             404: {
                 description: 'Movimentação de estoque não encontrada'
@@ -217,7 +468,12 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Histórico de movimentações do rolo'
+                description: 'Histórico de movimentações do rolo',
+                content: {
+                    'application/json': {
+                        schema: z.array(movimentacaoSchema)
+                    }
+                }
             },
             404: {
                 description: 'Rolo não encontrado'
