@@ -3,12 +3,15 @@ import { AjusteEstoqueCorteService, ListAllEstoqueCorteService, ListByIdEstoqueC
 
 class ListAllEstoqueCorteController {
     async handle(req: Request, res: Response) {
-        const { produtoId, loteProducaoId, tamanhoId } = req.query;
+        const { produtoId, loteProducaoId, tamanhoId, corId, page, limit } = req.query;
 
         const estoque = await new ListAllEstoqueCorteService().execute(
             produtoId as string | undefined,
             loteProducaoId as string | undefined,
-            tamanhoId as string | undefined
+            tamanhoId as string | undefined,
+            corId as string | undefined,
+            page as string | undefined,
+            limit as string | undefined
         );
 
         return res.json(estoque);

@@ -25,7 +25,23 @@ const direcionamentoInclude = {
             responsavel: true,
             items: {
                 include: {
-                    tamanho: true
+                    direcionamentoItem: {
+                        include: {
+                            estoqueCorte: {
+                                include: {
+                                    produto: true,
+                                    tamanho: true,
+                                    cor: true,
+                                    lote: {
+                                        select: {
+                                            id: true,
+                                            codigoLote: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -297,7 +313,7 @@ class UpdateDirecionamentoService {
                             direcionamentoId: id,
                             responsavelId,
                             dataConferencia: new Date(),
-                            statusQualidade: "validando",
+                            status: "validando",
                             liberadoPagamento: false
                         }
                     });

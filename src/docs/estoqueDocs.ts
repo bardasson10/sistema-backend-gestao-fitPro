@@ -17,8 +17,7 @@ const corSchema = z.object({
 
 const tecidoResumoSchema = z.object({
     id: z.string().uuid(),
-    nome: z.string(),
-    cor: corSchema.nullable().optional()
+    nome: z.string()
 });
 
 const produtoResumoSchema = z.object({
@@ -43,7 +42,18 @@ const estoqueCorteListItemSchema = z.object({
     quantidadeDisponivel: z.number().int(),
     produto: produtoResumoSchema,
     tamanho: tamanhoResumoSchema,
+    cor: corSchema,
     lote: loteResumoSchema
+});
+
+const paginatedEstoqueCorteSchema = z.object({
+    data: z.array(estoqueCorteListItemSchema),
+    pagination: z.object({
+        total: z.number().int(),
+        page: z.number().int(),
+        limit: z.number().int(),
+        pages: z.number().int()
+    })
 });
 
 const historicoEnvioSchema = z.object({
@@ -58,6 +68,7 @@ const estoqueCorteDetalheSchema = z.object({
     quantidadeDisponivel: z.number().int(),
     produto: produtoResumoSchema,
     tamanho: tamanhoResumoSchema,
+    cor: corSchema,
     lote: loteResumoSchema,
     historicoEnvios: z.array(historicoEnvioSchema)
 });
@@ -121,7 +132,10 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
             query: z.object({
                 produtoId: z.uuid().optional(),
                 loteProducaoId: z.uuid().optional(),
-                tamanhoId: z.uuid().optional()
+                tamanhoId: z.uuid().optional(),
+                corId: z.uuid().optional(),
+                page: z.coerce.number().int().positive().optional(),
+                limit: z.coerce.number().int().positive().optional()
             })
         },
         responses: {
@@ -129,7 +143,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
                 description: 'Itens com quantidadeDisponivel maior que zero',
                 content: {
                     'application/json': {
-                        schema: z.array(estoqueCorteListItemSchema)
+                        schema: paginatedEstoqueCorteSchema
                     }
                 }
             }

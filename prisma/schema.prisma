@@ -136,6 +136,7 @@ model Cor {
   codigoHex String?  @map("codigo_hex")
   
   tecidos   Tecido[]
+  estoqueCorte EstoqueCorte[]
 
   @@map("cor")
 }
@@ -354,6 +355,7 @@ model EstoqueCorte {
   loteProducaoId      String   @map("lote_producao_id")
   produtoId           String   @map("produto_id")
   tamanhoId           String   @map("tamanho_id")
+  corId               String   @map("cor_id")
   quantidadeDisponivel Int      @map("quantidade_disponivel") // Inicia com o total cortado, diminui nos direcionamentos
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
@@ -361,11 +363,13 @@ model EstoqueCorte {
   lote                LoteProducao @relation(fields: [loteProducaoId], references: [id], onDelete: Cascade)
   produto             Produto      @relation(fields: [produtoId], references: [id])
   tamanho             Tamanho      @relation(fields: [tamanhoId], references: [id])
+  cor                 Cor          @relation(fields: [corId], references: [id])
   // Lista de vezes que esse estoque foi puxado para uma remessa
   direcionamentoItems DirecionamentoItem[]
 
-  @@unique([loteProducaoId, produtoId, tamanhoId])
+  @@unique([loteProducaoId, produtoId, tamanhoId, corId])
   @@index([loteProducaoId])
+  @@index([corId])
   @@map("estoque_corte")
 }
 

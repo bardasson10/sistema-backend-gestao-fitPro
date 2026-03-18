@@ -98,7 +98,7 @@ class CreateConferenciaService {
                 direcionamentoId,
                 responsavelId,
                 dataConferencia: dataConferencia ? new Date(dataConferencia) : new Date(),
-                statusQualidade: statusFinal,
+            status: statusFinal,
                 observacao,
                 liberadoPagamento: liberadoFinal,
                 items: items ? {
@@ -136,7 +136,7 @@ class ListAllConferenciaService {
         if (statusQualidade || liberadoPagamento !== undefined) {
             // Se filtros são passados, usar eles
             whereCondition = {
-                ...(statusQualidade && { statusQualidade }),
+                ...(statusQualidade && { status: statusQualidade }),
                 ...(liberadoPagamento !== undefined && { liberadoPagamento })
             };
         } else {
@@ -144,7 +144,7 @@ class ListAllConferenciaService {
             whereCondition = {
                 NOT: {
                     AND: [
-                        { statusQualidade: "conforme" },
+                        { status: "conforme" },
                         { liberadoPagamento: true }
                     ]
                 }
@@ -170,10 +170,7 @@ class ListAllConferenciaService {
                 }
             }),
             prismaClient.conferencia.count({
-                where: {
-                    ...(statusQualidade && { statusQualidade }),
-                    ...(liberadoPagamento !== undefined && { liberadoPagamento })
-                }
+                where: whereCondition
             })
         ]);
 
@@ -215,7 +212,7 @@ class UpdateConferenciaService {
             throw new Error("Conferência não encontrada.");
         }
 
-        const statusFinal = statusQualidade ?? conferencia.statusQualidade;
+        const statusFinal = statusQualidade ?? conferencia.status;
         if (liberadoPagamento === true && statusFinal !== "conforme") {
             throw new Error("Não é possível liberar pagamento para conferências não conforme.");
         }
@@ -276,7 +273,7 @@ class UpdateConferenciaService {
                     ...(direcionamentoId && { direcionamentoId }),
                     ...(responsavelId && { responsavelId }),
                     ...(dataConferencia && { dataConferencia: new Date(dataConferencia) }),
-                    ...(statusQualidade && { statusQualidade }),
+                    ...(statusQualidade && { status: statusQualidade }),
                     ...(liberadoPagamento !== undefined && { liberadoPagamento }),
                     ...(observacao !== undefined && { observacao })
                 },
@@ -367,9 +364,9 @@ class GetRelatorioProdutividadeService {
         }
 
         const totalConferencias = conferencias.length;
-        const conformes = conferencias.filter(c => c.statusQualidade === "conforme").length;
-        const naoConformes = conferencias.filter(c => c.statusQualidade === "nao_conforme").length;
-        const comDefeito = conferencias.filter(c => c.statusQualidade === "com_defeito").length;
+        const conformes = conferencias.filter(c => c.status === "conforme").length;
+        const naoConformes = conferencias.filter(c => c.status === "nao_conforme").length;
+        const comDefeito = conferencias.filter(c => c.status === "com_defeito").length;
         const pagasAutorizadas = conferencias.filter(c => c.liberadoPagamento === true).length;
 
         // Agrupar por facção
@@ -384,8 +381,8 @@ class GetRelatorioProdutividadeService {
                 };
             }
             porFaccao[faccaoNome].total++;
-            if (conf.statusQualidade === "conforme") porFaccao[faccaoNome].conforme++;
-            if (conf.statusQualidade === "com_defeito") porFaccao[faccaoNome].defeitos++;
+            if (conf.status === "conforme") porFaccao[faccaoNome].conforme++;
+            if (conf.status === "com_defeito") porFaccao[faccaoNome].defeitos++;
         });
 
         return {

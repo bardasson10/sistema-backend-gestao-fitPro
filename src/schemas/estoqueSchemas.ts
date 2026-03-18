@@ -50,6 +50,9 @@ export const listEstoqueCorteSchema = z.object({
         produtoId: z.uuid("ID de produto invalido").optional(),
         loteProducaoId: z.uuid("ID de lote invalido").optional(),
         tamanhoId: z.uuid("ID de tamanho invalido").optional(),
+        corId: z.uuid("ID de cor invalido").optional(),
+        page: z.string().regex(/^\d+$/, "Page deve ser numerico").optional(),
+        limit: z.string().regex(/^\d+$/, "Limit deve ser numerico").optional(),
     }),
 });
 

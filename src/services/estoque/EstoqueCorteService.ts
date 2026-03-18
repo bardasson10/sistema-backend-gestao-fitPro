@@ -1,52 +1,72 @@
 import prismaClient from "../../prisma";
+import { createPaginatedResponse, PaginatedResponse, parsePaginationParams } from "../../utils/pagination";
 
 class ListAllEstoqueCorteService {
-    async execute(produtoId?: string, loteProducaoId?: string, tamanhoId?: string) {
-        return prismaClient.estoqueCorte.findMany({
-            where: {
-                quantidadeDisponivel: { gt: 0 },
-                ...(produtoId && { produtoId }),
-                ...(loteProducaoId && { loteProducaoId }),
-                ...(tamanhoId && { tamanhoId })
-            },
-            include: {
-                produto: {
-                    select: {
-                        id: true,
-                        nome: true,
-                        sku: true
-                    }
-                },
-                tamanho: {
-                    select: {
-                        id: true,
-                        nome: true
-                    }
-                },
-                lote: {
-                    select: {
-                        id: true,
-                        codigoLote: true,
-                        tecido: {
-                            select: {
-                                id: true,
-                                nome: true,
-                                cor: {
-                                    select: {
-                                        id: true,
-                                        nome: true,
-                                        codigoHex: true
-                                    }
+    async execute(
+        produtoId?: string,
+        loteProducaoId?: string,
+        tamanhoId?: string,
+        corId?: string,
+        page?: number | string,
+        limit?: number | string
+    ): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+
+        const where = {
+            quantidadeDisponivel: { gt: 0 },
+            ...(produtoId && { produtoId }),
+            ...(loteProducaoId && { loteProducaoId }),
+            ...(tamanhoId && { tamanhoId }),
+            ...(corId && { corId })
+        };
+
+        const [itens, total] = await Promise.all([
+            prismaClient.estoqueCorte.findMany({
+                where,
+                include: {
+                    produto: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            sku: true
+                        }
+                    },
+                    tamanho: {
+                        select: {
+                            id: true,
+                            nome: true
+                        }
+                    },
+                    cor: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            codigoHex: true
+                        }
+                    },
+                    lote: {
+                        select: {
+                            id: true,
+                            codigoLote: true,
+                            tecido: {
+                                select: {
+                                    id: true,
+                                    nome: true
                                 }
                             }
                         }
                     }
-                }
-            },
-            orderBy: {
-                updatedAt: "desc"
-            }
-        });
+                },
+                orderBy: {
+                    updatedAt: "desc"
+                },
+                skip,
+                take: pageLimit
+            }),
+            prismaClient.estoqueCorte.count({ where })
+        ]);
+
+        return createPaginatedResponse(itens, total, pageNumber, pageLimit);
     }
 }
 
@@ -68,6 +88,13 @@ class ListByIdEstoqueCorteService {
                         nome: true
                     }
                 },
+                cor: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        codigoHex: true
+                    }
+                },
                 lote: {
                     select: {
                         id: true,
@@ -75,14 +102,7 @@ class ListByIdEstoqueCorteService {
                         tecido: {
                             select: {
                                 id: true,
-                                nome: true,
-                                cor: {
-                                    select: {
-                                        id: true,
-                                        nome: true,
-                                        codigoHex: true
-                                    }
-                                }
+                                nome: true
                             }
                         }
                     }
@@ -126,6 +146,7 @@ class ListByIdEstoqueCorteService {
             quantidadeDisponivel: estoque.quantidadeDisponivel,
             produto: estoque.produto,
             tamanho: estoque.tamanho,
+            cor: estoque.cor,
             lote: estoque.lote,
             historicoEnvios
         };
@@ -179,6 +200,13 @@ class AjusteEstoqueCorteService {
                         nome: true
                     }
                 },
+                cor: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        codigoHex: true
+                    }
+                },
                 lote: {
                     select: {
                         id: true,
@@ -186,14 +214,7 @@ class AjusteEstoqueCorteService {
                         tecido: {
                             select: {
                                 id: true,
-                                nome: true,
-                                cor: {
-                                    select: {
-                                        id: true,
-                                        nome: true,
-                                        codigoHex: true
-                                    }
-                                }
+                                nome: true
                             }
                         }
                     }

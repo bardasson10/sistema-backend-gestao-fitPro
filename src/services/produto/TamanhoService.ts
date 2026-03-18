@@ -98,7 +98,7 @@ class DeleteTamanhoService {
             where: { id },
             include: {
                 loteItems: true,
-                conferenciaItems: true,
+                estoqueCorte: true,
                 tiposAceitos: true
             }
         });
@@ -107,7 +107,7 @@ class DeleteTamanhoService {
             throw new Error("Tamanho não encontrado.");
         }
 
-        if (tamanho.loteItems.length > 0 || tamanho.conferenciaItems.length > 0) {
+        if (tamanho.loteItems.length > 0 || tamanho.estoqueCorte.length > 0 || tamanho.tiposAceitos.length > 0) {
             throw new Error("Não é possível deletar um tamanho que possui registros associados.");
         }
 

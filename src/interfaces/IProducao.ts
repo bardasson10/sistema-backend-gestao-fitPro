@@ -121,6 +121,9 @@ export interface IGradeSobraItem {
     estoqueCorteId: string;
     produtoId: string;
     tamanhoId: string;
+    corId: string;
+    corNome: string;
+    corCodigoHex?: string | null;
     produtoNome: string;
     sku: string;
     tamanhoNome: string;
