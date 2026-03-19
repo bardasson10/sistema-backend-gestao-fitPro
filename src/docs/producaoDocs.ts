@@ -128,22 +128,10 @@ const direcionamentoItemSchema = z.object({
     }).optional()
 });
 
-const conferenciaResumoSchema = z.object({
-    id: z.string().uuid(),
-    direcionamentoId: z.string().uuid(),
-    responsavelId: z.string().uuid(),
-    dataConferencia: z.string().datetime().nullable().optional(),
-    statusQualidade: z.string(),
-    liberadoPagamento: z.boolean(),
-    observacao: z.string().nullable().optional(),
-    responsavel: usuarioResumoSchema.optional(),
-    items: z.array(z.any()).optional()
-});
-
 const direcionamentoSchema = z.object({
     id: z.string().uuid(),
     faccaoId: z.string().uuid(),
-    tipoServico: z.string(),
+    tipoServico: z.enum(["costura", "corte"]),
     quantidade: z.number().int(),
     dataSaida: z.string().datetime().nullable().optional(),
     dataPrevisaoRetorno: z.string().datetime().nullable().optional(),
@@ -151,8 +139,41 @@ const direcionamentoSchema = z.object({
     createdAt: z.string().datetime().optional(),
     updatedAt: z.string().datetime().optional(),
     faccao: faccaoSchema.optional(),
-    items: z.array(direcionamentoItemSchema),
-    conferencias: z.array(conferenciaResumoSchema).optional()
+    items: z.array(direcionamentoItemSchema)
+});
+
+const direcionamentoListItemSchema = z.object({
+    id: z.string().uuid(),
+    status: z.string(),
+    tipoServico: z.enum(["costura", "corte"]),
+    quantidade: z.number().int(),
+    dataSaida: z.string().datetime(),
+    dataPrevisaoRetorno: z.string().datetime(),
+    faccao: z.object({
+        id: z.string().uuid(),
+        nome: z.string(),
+        responsavel: z.string()
+    }),
+    items: z.array(z.object({
+        id: z.string().uuid(),
+        quantidade: z.number().int(),
+        produto: z.object({
+            id: z.string().uuid(),
+            nome: z.string(),
+            sku: z.string(),
+            cor: z.object({
+                id: z.string().uuid(),
+                nome: z.string(),
+                codigoHex: z.string()
+            }),
+            tamanho: z.string()
+        }),
+        lote: z.object({
+            id: z.string().uuid(),
+            codigoLote: z.string()
+        })
+    })),
+    createdAt: z.string().datetime()
 });
 
 const conferenciaItemSchema = z.object({
@@ -198,11 +219,14 @@ const paginatedLotesSchema = z.object({
 });
 
 const paginatedDirecionamentosSchema = z.object({
-    data: z.array(direcionamentoSchema),
-    total: z.number().int(),
-    page: z.number().int(),
-    limit: z.number().int(),
-    totalPages: z.number().int()
+    data: z.array(direcionamentoListItemSchema),
+    pagination: z.object({
+        total: z.number().int(),
+        page: z.number().int(),
+        limit: z.number().int(),
+        totalPages: z.number().int(),
+        pages: z.number().int().optional()
+    })
 });
 
 const paginatedConferenciasSchema = z.object({

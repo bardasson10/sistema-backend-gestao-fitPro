@@ -102,7 +102,7 @@ export interface IDirecionamentoItemInput {
 
 export interface IDirecionamentoInput {
     faccaoId: string;
-    tipoServico: "costura" | "estampa" | "tingimento" | "acabamento" | "corte" | "outro";
+    tipoServico: "costura" | "corte";
     items: IDirecionamentoItemInput[];
     dataSaida?: Date;
     dataPrevisaoRetorno?: Date;

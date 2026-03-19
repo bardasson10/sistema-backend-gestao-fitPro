@@ -1,5 +1,5 @@
 import { ICreateDirecionamentoRequest, IUpdateDirecionamentoRequest } from "../../interfaces/IProducao";
-import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
+import { parsePaginationParams, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
 const direcionamentoInclude = {
@@ -135,7 +135,7 @@ class CreateDirecionamentoService {
                 .map((estoque) => estoque.lote.id)
         )];
 
-        const direcionamentosCriados = await prismaClient.$transaction(async (tx) => {
+        const direcionamentosCriadosIds = await prismaClient.$transaction(async (tx) => {
             for (const loteId of lotesPlanejados) {
                 await tx.loteProducao.update({
                     where: { id: loteId },
@@ -163,7 +163,7 @@ class CreateDirecionamentoService {
                 }
             }
 
-            return Promise.all(
+            const criados = await Promise.all(
                 direcionamentos.map((direcionamento) => {
                     const quantidadeTotal = direcionamento.items.reduce((sum, item) => sum + item.quantidade, 0);
 
@@ -182,13 +182,35 @@ class CreateDirecionamentoService {
                                 }))
                             }
                         },
-                        include: direcionamentoInclude
+                        select: {
+                            id: true
+                        }
                     });
                 })
             );
+
+            return criados.map((direcionamento) => direcionamento.id);
+        }, {
+            maxWait: 10000,
+            timeout: 30000
         });
 
-        return direcionamentosCriados;
+        const direcionamentosCriados = await prismaClient.direcionamento.findMany({
+            where: {
+                id: {
+                    in: direcionamentosCriadosIds
+                }
+            },
+            include: direcionamentoInclude
+        });
+
+        const direcionamentosPorId = new Map(
+            direcionamentosCriados.map((direcionamento) => [direcionamento.id, direcionamento])
+        );
+
+        return direcionamentosCriadosIds
+            .map((id) => direcionamentosPorId.get(id))
+            .filter((direcionamento): direcionamento is NonNullable<typeof direcionamento> => Boolean(direcionamento));
     }
 }
 
@@ -202,7 +224,57 @@ class ListAllDirecionamentoService {
                     ...(status && { status }),
                     ...(faccaoId && { faccaoId })
                 },
-                include: direcionamentoInclude,
+                select: {
+                    id: true,
+                    status: true,
+                    tipoServico: true,
+                    quantidade: true,
+                    dataSaida: true,
+                    dataPrevisaoRetorno: true,
+                    createdAt: true,
+                    faccao: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            responsavel: true
+                        }
+                    },
+                    items: {
+                        select: {
+                            id: true,
+                            quantidade: true,
+                            estoqueCorte: {
+                                select: {
+                                    produto: {
+                                        select: {
+                                            id: true,
+                                            nome: true,
+                                            sku: true
+                                        }
+                                    },
+                                    cor: {
+                                        select: {
+                                            id: true,
+                                            nome: true,
+                                            codigoHex: true
+                                        }
+                                    },
+                                    tamanho: {
+                                        select: {
+                                            nome: true
+                                        }
+                                    },
+                                    lote: {
+                                        select: {
+                                            id: true,
+                                            codigoLote: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
                 skip,
                 take: pageLimit,
                 orderBy: {
@@ -217,7 +289,52 @@ class ListAllDirecionamentoService {
             })
         ]);
 
-        return createPaginatedResponse(direcionamentos, total, pageNumber, pageLimit);
+        const data = direcionamentos.map((direcionamento) => ({
+            id: direcionamento.id,
+            status: direcionamento.status,
+            tipoServico: direcionamento.tipoServico,
+            quantidade: direcionamento.quantidade,
+            dataSaida: direcionamento.dataSaida,
+            dataPrevisaoRetorno: direcionamento.dataPrevisaoRetorno,
+            faccao: {
+                id: direcionamento.faccao.id,
+                nome: direcionamento.faccao.nome,
+                responsavel: direcionamento.faccao.responsavel ?? ""
+            },
+            items: direcionamento.items.map((item) => ({
+                id: item.id,
+                quantidade: item.quantidade,
+                produto: {
+                    id: item.estoqueCorte.produto.id,
+                    nome: item.estoqueCorte.produto.nome,
+                    sku: item.estoqueCorte.produto.sku,
+                    cor: {
+                        id: item.estoqueCorte.cor.id,
+                        nome: item.estoqueCorte.cor.nome,
+                        codigoHex: item.estoqueCorte.cor.codigoHex ?? ""
+                    },
+                    tamanho: item.estoqueCorte.tamanho.nome
+                },
+                lote: {
+                    id: item.estoqueCorte.lote.id,
+                    codigoLote: item.estoqueCorte.lote.codigoLote
+                }
+            })),
+            createdAt: direcionamento.createdAt
+        }));
+
+        const totalPages = Math.ceil(total / pageLimit);
+
+        return {
+            data,
+            pagination: {
+                total,
+                page: pageNumber,
+                limit: pageLimit,
+                totalPages,
+                pages: totalPages
+            }
+        } as PaginatedResponse<any>;
     }
 }
 
@@ -325,6 +442,9 @@ class UpdateDirecionamentoService {
                 data: dataUpdate,
                 include: direcionamentoInclude
             });
+        }, {
+            maxWait: 10000,
+            timeout: 30000
         });
 
         return direcionamentoAtualizado;
@@ -366,6 +486,9 @@ class DeleteDirecionamentoService {
             await tx.direcionamento.delete({
                 where: { id }
             });
+        }, {
+            maxWait: 10000,
+            timeout: 30000
         });
 
         return { message: "Direcionamento deletado com sucesso." };

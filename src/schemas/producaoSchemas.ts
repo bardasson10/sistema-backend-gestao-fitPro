@@ -106,7 +106,7 @@ export const createDirecionamentoSchema = z.object({
     body: z.object({
         direcionamentos: z.array(z.object({
             faccaoId: z.uuid("ID de facção inválido"),
-            tipoServico: z.enum(["costura", "estampa", "tingimento", "acabamento", "corte", "outro"]),
+            tipoServico: z.enum(["costura", "corte"]),
             dataSaida: z.coerce.date().optional(),
             dataPrevisaoRetorno: z.coerce.date().optional(),
             items: z.array(z.object({
