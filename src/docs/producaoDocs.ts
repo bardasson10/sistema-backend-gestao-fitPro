@@ -10,8 +10,6 @@ import {
     updateDirecionamentoSchema,
     createConferenciaSchema,
     updateConferenciaSchema,
-    conferenciaResponseSchema,
-    conferenciaPaginatedResponseSchema,
 } from '../schemas/producaoSchemas';
 import { z } from 'zod';
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
