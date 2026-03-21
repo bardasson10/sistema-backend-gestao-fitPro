@@ -161,6 +161,58 @@ export const updateConferenciaSchema = z.object({
     }),
 });
 
+// Schema de resposta para Conferência
+export const conferenciaResponseSchema = z.object({
+    id: z.string().uuid(),
+    dataConferencia: z.string().nullable(),
+    statusQualidade: z.string().nullable(),
+    observacao: z.string().nullable(),
+    liberadoPagamento: z.boolean(),
+    responsavel: z.object({
+        id: z.string().uuid(),
+        nome: z.string(),
+    }),
+    direcionamento: z.object({
+        id: z.string().uuid(),
+        tipoServico: z.string(),
+        status: z.string(),
+        dataSaida: z.string().nullable(),
+        faccao: z.object({
+            id: z.string().uuid(),
+            nome: z.string(),
+        }),
+    }),
+    items: z.array(z.object({
+        id: z.string().uuid(),
+        quantidadeEnviada: z.number().int().nonnegative(),
+        qtdRecebida: z.number().int().nonnegative(),
+        qtdDefeito: z.number().int().nonnegative(),
+        quebra: z.number().int(),
+        produto: z.object({
+            id: z.string().uuid(),
+            nome: z.string(),
+            sku: z.string(),
+        }),
+        tamanho: z.string(),
+        cor: z.object({
+            nome: z.string(),
+            codigoHex: z.string().nullable(),
+        }),
+        lote: z.string(),
+    })),
+});
+
+// Schema para resposta paginada de Conferências
+export const conferenciaPaginatedResponseSchema = z.object({
+    data: z.array(conferenciaResponseSchema),
+    total: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    totalPages: z.number().int().nonnegative(),
+    hasNextPage: z.boolean(),
+    hasPreviousPage: z.boolean(),
+});
+
 export const addRolosLoteSchema = z.object({
     body: z.object({
         rolos: z.array(z.object({

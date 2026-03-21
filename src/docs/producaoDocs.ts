@@ -10,6 +10,8 @@ import {
     updateDirecionamentoSchema,
     createConferenciaSchema,
     updateConferenciaSchema,
+    conferenciaResponseSchema,
+    conferenciaPaginatedResponseSchema,
 } from '../schemas/producaoSchemas';
 import { z } from 'zod';
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
@@ -178,28 +180,44 @@ const direcionamentoListItemSchema = z.object({
 
 const conferenciaItemSchema = z.object({
     id: z.string().uuid(),
-    conferenciaId: z.string().uuid(),
-    direcionamentoItemId: z.string().uuid(),
-    qtdRecebida: z.number().int(),
-    qtdDefeito: z.number().int(),
-    quantidadeEnviada: z.number().int().optional(),
-    quebra: z.number().int().optional(),
-    direcionamentoItem: direcionamentoItemSchema.optional()
+    quantidadeEnviada: z.number().int().nonnegative(),
+    qtdRecebida: z.number().int().nonnegative(),
+    qtdDefeito: z.number().int().nonnegative(),
+    quebra: z.number().int(),
+    produto: z.object({
+        id: z.string().uuid(),
+        nome: z.string(),
+        sku: z.string(),
+    }),
+    tamanho: z.string(),
+    cor: z.object({
+        nome: z.string(),
+        codigoHex: z.string().nullable(),
+    }),
+    lote: z.string(),
 });
 
 const conferenciaSchema = z.object({
     id: z.string().uuid(),
-    direcionamentoId: z.string().uuid(),
-    responsavelId: z.string().uuid(),
-    dataConferencia: z.string().datetime().nullable().optional(),
-    statusQualidade: z.string(),
-    observacao: z.string().nullable().optional(),
+    dataConferencia: z.string().nullable(),
+    statusQualidade: z.string().nullable(),
+    observacao: z.string().nullable(),
     liberadoPagamento: z.boolean(),
-    createdAt: z.string().datetime().optional(),
-    updatedAt: z.string().datetime().optional(),
-    direcionamento: direcionamentoSchema.optional(),
-    responsavel: usuarioResumoSchema.optional(),
-    items: z.array(conferenciaItemSchema).optional()
+    responsavel: z.object({
+        id: z.string().uuid(),
+        nome: z.string(),
+    }),
+    direcionamento: z.object({
+        id: z.string().uuid(),
+        tipoServico: z.string(),
+        status: z.string(),
+        dataSaida: z.string().nullable(),
+        faccao: z.object({
+            id: z.string().uuid(),
+            nome: z.string(),
+        }),
+    }),
+    items: z.array(conferenciaItemSchema),
 });
 
 const paginatedFaccoesSchema = z.object({
@@ -233,8 +251,10 @@ const paginatedConferenciasSchema = z.object({
     data: z.array(conferenciaSchema),
     total: z.number().int(),
     page: z.number().int(),
-    limit: z.number().int(),
-    totalPages: z.number().int()
+    pageSize: z.number().int(),
+    totalPages: z.number().int(),
+    hasNextPage: z.boolean(),
+    hasPreviousPage: z.boolean(),
 });
 
 const relatorioProdutividadeSchema = z.object({

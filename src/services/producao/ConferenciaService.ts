@@ -10,7 +10,8 @@ const conferenciaDirecionamentoInclude = {
                 include: {
                     lote: true,
                     produto: true,
-                    tamanho: true
+                    tamanho: true,
+                    cor: true
                 }
             }
         }
@@ -24,28 +25,98 @@ const conferenciaItemsInclude = {
                 include: {
                     lote: true,
                     produto: true,
-                    tamanho: true
+                    tamanho: true,
+                    cor: true
                 }
             }
         }
     }
 } as const;
 
-function enrichConferenciaItems<T extends { items?: Array<any> }>(conferencia: T) {
-    const items = (conferencia.items ?? []).map((item) => {
-        const quantidadeEnviada = item.direcionamentoItem?.quantidade ?? 0;
-        const quebra = quantidadeEnviada - (item.qtdRecebida + item.qtdDefeito);
-
-        return {
-            ...item,
-            quantidadeEnviada,
-            quebra
+interface IConferenciaResponse {
+    id: string;
+    dataConferencia: string | null;
+    statusQualidade: string | null;
+    observacao: string | null;
+    liberadoPagamento: boolean;
+    responsavel: {
+        id: string;
+        nome: string;
+    };
+    direcionamento: {
+        id: string;
+        tipoServico: string;
+        status: string;
+        dataSaida: string | null;
+        faccao: {
+            id: string;
+            nome: string;
         };
-    });
+    };
+    items: Array<{
+        id: string;
+        quantidadeEnviada: number;
+        qtdRecebida: number;
+        qtdDefeito: number;
+        quebra: number;
+        produto: {
+            id: string;
+            nome: string;
+            sku: string;
+        };
+        tamanho: string;
+        cor: {
+            nome: string;
+            codigoHex: string | null;
+        };
+        lote: string;
+    }>;
+}
 
+function mapConferenciaToResponse(conferencia: any): IConferenciaResponse {
     return {
-        ...conferencia,
-        items
+        id: conferencia.id,
+        dataConferencia: conferencia.dataConferencia ? conferencia.dataConferencia.toISOString().split('T')[0] : null,
+        statusQualidade: conferencia.status,
+        observacao: conferencia.observacao,
+        liberadoPagamento: conferencia.liberadoPagamento,
+        responsavel: {
+            id: conferencia.responsavel.id,
+            nome: conferencia.responsavel.nome
+        },
+        direcionamento: {
+            id: conferencia.direcionamento.id,
+            tipoServico: conferencia.direcionamento.tipoServico,
+            status: conferencia.direcionamento.status,
+            dataSaida: conferencia.direcionamento.dataSaida ? conferencia.direcionamento.dataSaida.toISOString().split('T')[0] : null,
+            faccao: {
+                id: conferencia.direcionamento.faccao.id,
+                nome: conferencia.direcionamento.faccao.nome
+            }
+        },
+        items: conferencia.items.map((item: any) => {
+            const quantidadeEnviada = item.direcionamentoItem.quantidade || 0;
+            const quebra = quantidadeEnviada - (item.qtdRecebida + item.qtdDefeito);
+
+            return {
+                id: item.id,
+                quantidadeEnviada,
+                qtdRecebida: item.qtdRecebida,
+                qtdDefeito: item.qtdDefeito,
+                quebra,
+                produto: {
+                    id: item.direcionamentoItem.estoqueCorte.produto.id,
+                    nome: item.direcionamentoItem.estoqueCorte.produto.nome,
+                    sku: item.direcionamentoItem.estoqueCorte.produto.sku
+                },
+                tamanho: item.direcionamentoItem.estoqueCorte.tamanho.nome,
+                cor: {
+                    nome: item.direcionamentoItem.estoqueCorte.cor.nome,
+                    codigoHex: item.direcionamentoItem.estoqueCorte.cor.codigoHex
+                },
+                lote: item.direcionamentoItem.estoqueCorte.lote.codigoLote
+            };
+        })
     };
 }
 
@@ -120,12 +191,12 @@ class CreateConferenciaService {
             }
         });
 
-        return enrichConferenciaItems(conferencia);
+        return mapConferenciaToResponse(conferencia);
     }
 }
 
 class ListAllConferenciaService {
-    async execute(statusQualidade?: string, liberadoPagamento?: boolean, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+    async execute(statusQualidade?: string, liberadoPagamento?: boolean, page?: number | string, limit?: number | string): Promise<PaginatedResponse<IConferenciaResponse>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
         // Por padrão, mostrar apenas conferências que:
@@ -174,13 +245,13 @@ class ListAllConferenciaService {
             })
         ]);
 
-        const conferenciasComQuebra = conferencias.map(enrichConferenciaItems);
-        return createPaginatedResponse(conferenciasComQuebra, total, pageNumber, pageLimit);
+        const conferenciasFormatadas = conferencias.map(mapConferenciaToResponse);
+        return createPaginatedResponse(conferenciasFormatadas, total, pageNumber, pageLimit);
     }
 }
 
 class ListByIdConferenciaService {
-    async execute(id: string) {
+    async execute(id: string): Promise<IConferenciaResponse> {
         const conferencia = await prismaClient.conferencia.findUnique({
             where: { id },
             include: {
@@ -198,12 +269,12 @@ class ListByIdConferenciaService {
             throw new Error("Conferência não encontrada.");
         }
 
-        return enrichConferenciaItems(conferencia);
+        return mapConferenciaToResponse(conferencia);
     }
 }
 
 class UpdateConferenciaService {
-    async execute(id: string, { direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items }: IUpdateConferenciaRequest) {
+    async execute(id: string, { direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items }: IUpdateConferenciaRequest): Promise<IConferenciaResponse> {
         const conferencia = await prismaClient.conferencia.findUnique({
             where: { id }
         });
@@ -289,7 +360,7 @@ class UpdateConferenciaService {
             });
         });
 
-        return enrichConferenciaItems(conferenciaAtualizada);
+        return mapConferenciaToResponse(conferenciaAtualizada);
     }
 }
 
@@ -402,3 +473,4 @@ class GetRelatorioProdutividadeService {
 }
 
 export { CreateConferenciaService, ListAllConferenciaService, ListByIdConferenciaService, UpdateConferenciaService, DeleteConferenciaService, GetRelatorioProdutividadeService };
+export type { IConferenciaResponse };
