@@ -652,7 +652,7 @@ function formatarLoteResponse(lote: any) {
 }
 
 class CreateLoteProducaoService {
-    async execute({ codigoLote, responsavelId, status, observacao, rolos }: ICreateLoteProducaoRequest) {
+    async execute({ codigoLote, responsavelId, observacao, rolos }: ICreateLoteProducaoRequest) {
         const loteAlreadyExists = await prismaClient.loteProducao.findUnique({
             where: { codigoLote }
         });
@@ -717,7 +717,7 @@ class CreateLoteProducaoService {
                     codigoLote,
                     tecidoId: tecidoIdFinal,
                     responsavelId,
-                    status: status || "planejado",
+                    status: "lote_criado",
                     observacao,
                     rolos: {
                         create: rolosAgrupados.map(rolo => ({
@@ -808,7 +808,7 @@ class ListByIdLoteProducaoService {
 }
 
 class UpdateLoteProducaoService {
-    async execute(id: string, { loteId, codigoLote, responsavelId, status, observacao, enfestos, usuarioId }: IUpdateLoteProducaoRequest) {
+    async execute(id: string, { loteId, codigoLote, responsavelId, status, observacao, gradeItens, enfestos, usuarioId }: IUpdateLoteProducaoRequest) {
         const loteAtualizado = await prismaClient.$transaction(async (tx) => {
             const lote = await tx.loteProducao.findUnique({
                 where: { id }
@@ -822,10 +822,29 @@ class UpdateLoteProducaoService {
                 throw new Error("loteId do body deve ser igual ao id da rota.");
             }
 
-            const enfestosComFolhasPositivas = enfestos?.filter(enfesto => enfesto.qtdFolhas > 0);
+            if (lote.status === "cortado") {
+                throw new Error("Lote com status 'cortado' não pode mais ser editado.");
+            }
+
+            const statusPermitidos: Record<string, string[]> = {
+                lote_criado: ["enfesto", "cortado"],
+                enfesto: ["cortado"],
+                cortado: []
+            };
+
+            if (status && !statusPermitidos[lote.status]?.includes(status) && status !== lote.status) {
+                throw new Error(`Não é permitido mudar status de '${lote.status}' para '${status}'.`);
+            }
+
+            const enfestosComItens = (enfestos ?? []).map((enfesto) => ({
+                ...enfesto,
+                itens: gradeItens ?? []
+            }));
+
+            const enfestosComFolhasPositivas = enfestosComItens.filter(enfesto => enfesto.qtdFolhas > 0);
             const rolosProducaoEntrada = extrairRolosProducaoDosEnfestos(enfestosComFolhasPositivas);
 
-            if (status === "em_producao" && lote.status === "planejado" && rolosProducaoEntrada.length > 0) {
+            if (status === "enfesto" && lote.status === "lote_criado" && rolosProducaoEntrada.length > 0) {
                 if (!usuarioId) {
                     throw new Error("usuárioId é obrigatório para registrar movimentações automáticas.");
                 }
@@ -1018,8 +1037,8 @@ class UpdateLoteProducaoService {
             }
 
             if (itemsComQuantidadePositiva.length > 0) {
-                if (["concluido", "cancelado"].includes(lote.status)) {
-                    throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
+                if (["cortado"].includes(lote.status)) {
+                    throw new Error("Não é possível adicionar items a um lote cortado.");
                 }
 
                 const [, nomesCorPorId] = await Promise.all([
@@ -1065,7 +1084,7 @@ class UpdateLoteProducaoService {
                 data: {
                     ...(codigoLote && { codigoLote }),
                     ...(responsavelId && { responsavelId }),
-                    status,
+                    ...(status && { status }),
                     observacao
                 },
                 include: loteInclude
@@ -1099,8 +1118,8 @@ class AddLoteItemsService {
                 throw new Error("Lote não encontrado.");
             }
 
-            if (["concluido", "cancelado"].includes(lote.status)) {
-                throw new Error("Não é possível adicionar items a um lote concluído ou cancelado.");
+            if (lote.status === "cortado") {
+                throw new Error("Não é possível adicionar itens a um lote cortado.");
             }
 
             const [, nomesCorPorId] = await Promise.all([
@@ -1336,6 +1355,10 @@ class AddRolosLoteService {
             throw new Error("Lote não encontrado.");
         }
 
+        if (lote.status === "cortado") {
+            throw new Error("Não é possível adicionar rolos a um lote cortado.");
+        }
+
         if (!rolos || rolos.length === 0) {
             throw new Error("É necessário informar ao menos um rolo.");
         }
@@ -1399,6 +1422,13 @@ class AddRolosLoteService {
                     }
                 });
             }
+
+            await tx.loteProducao.update({
+                where: { id },
+                data: {
+                    status: lote.status === "lote_criado" ? "enfesto" : lote.status
+                }
+            });
 
             return tx.loteProducao.findUnique({
                 where: { id },

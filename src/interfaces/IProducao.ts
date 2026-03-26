@@ -53,6 +53,12 @@ export interface IEnfestoComItensProducaoInput {
     itens: ILoteItemInput[];
 }
 
+export interface IEnfestoProducaoUpdateInput {
+    corId: string;
+    qtdFolhas: number;
+    rolosProducao: Array<{ estoqueRoloId: string; pesoReservado: number }>;
+}
+
 export interface IEnfestoComItensInput {
     corId: string;
     qtdFolhas: number;
@@ -63,7 +69,7 @@ export interface IEnfestoComItensInput {
 export interface ICreateLoteProducaoRequest {
     codigoLote: string;
     responsavelId: string;
-    status?: string;
+    status?: "lote_criado" | "enfesto" | "cortado";
     observacao?: string;
     rolos: ILoteRoloInput[];
 }
@@ -72,9 +78,10 @@ export interface IUpdateLoteProducaoRequest {
     loteId?: string;
     codigoLote?: string;
     responsavelId?: string;
-    status?: string;
+    status?: "lote_criado" | "enfesto" | "cortado";
     observacao?: string;
-    enfestos?: IEnfestoComItensProducaoInput[];
+    gradeItens?: ILoteItemInput[];
+    enfestos?: IEnfestoProducaoUpdateInput[];
     usuarioId?: string; // ID do usuário para movimentação automática
 }
 
@@ -100,12 +107,15 @@ export interface IDirecionamentoItemInput {
     quantidade: number;
 }
 
+export interface IProdutoSKUValorFaccaoInput {
+    sku: string;
+    valorFaccaoPorPeca: number;
+}
+
 export interface IDirecionamentoInput {
     faccaoId: string;
     tipoServico: "costura" | "corte";
     items: IDirecionamentoItemInput[];
-    dataSaida?: Date;
-    dataPrevisaoRetorno?: Date;
 }
 
 export interface ICreateDirecionamentoRequest {
@@ -113,7 +123,15 @@ export interface ICreateDirecionamentoRequest {
 }
 
 export interface IUpdateDirecionamentoRequest {
-    status?: string;
+    direcionamentos: IDirecionamentoInput[];
+}
+
+export interface IUpdateDirecionamentoStatusRequest {
+    status: "separado" | "em_producao" | "entregue";
+}
+
+export interface IUpdateDirecionamentoSkuPriceRequest {
+    produtoSKU: IProdutoSKUValorFaccaoInput[];
 }
 
 // Grade Sobra - Rastreamento de itens não direcionados

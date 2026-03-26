@@ -8,6 +8,8 @@ import {
     addRolosLoteSchema,
     createDirecionamentoSchema,
     updateDirecionamentoSchema,
+    updateDirecionamentoStatusSchema,
+    updateDirecionamentoSkuPriceSchema,
     createConferenciaSchema,
     updateConferenciaSchema,
 } from '../schemas/producaoSchemas';
@@ -104,17 +106,54 @@ const loteSchema = z.object({
     codigoLote: z.string(),
     tecidoId: z.string().uuid(),
     responsavelId: z.string().uuid().nullable().optional(),
-    status: z.string(),
-    dataInicio: z.string().datetime().nullable().optional(),
-    dataFim: z.string().datetime().nullable().optional(),
+    status: z.enum(["lote_criado", "enfesto", "cortado"]),
+    observacao: z.string().nullable().optional(),
     createdAt: z.string().datetime().optional(),
     updatedAt: z.string().datetime().optional(),
     tecido: tecidoResumoSchema.optional(),
     responsavel: usuarioResumoSchema.optional(),
     items: z.array(loteItemSchema).optional(),
-    rolos: z.array(z.any()).optional(),
-    estoqueCorte: z.array(estoqueCorteResumoSchema.extend({
-        direcionamentoItems: z.array(z.any()).optional()
+    materiais: z.array(z.object({
+        tecidoId: z.string().uuid(),
+        nome: z.string().optional(),
+        codigoReferencia: z.string().nullable().optional(),
+        rendimentoMetroKg: z.number().nullable().optional(),
+        larguraMetros: z.number().nullable().optional(),
+        gramatura: z.number().nullable().optional(),
+        valorPorKg: z.number(),
+        pesoTotal: z.number(),
+        cores: z.array(z.object({
+            corId: z.string().uuid().nullable().optional(),
+            nome: z.string().nullable().optional(),
+            qtdFolhas: z.number().int(),
+            valorTecido: z.number(),
+            codigoHex: z.string().nullable().optional(),
+            rolos: z.array(z.object({
+                id: z.string().uuid(),
+                codigoBarraRolo: z.string().nullable().optional(),
+                pesoAtualKg: z.number(),
+                pesoReservado: z.number(),
+                situacao: z.string()
+            })),
+            gradeLote: z.array(z.object({
+                id: z.string().uuid(),
+                produtoId: z.string().uuid(),
+                tamanhoId: z.string().uuid(),
+                quantidadePlanejada: z.number().int(),
+                qtdMultiplicadorGrade: z.number().nullable().optional(),
+                produtoNome: z.string().optional(),
+                sku: z.string().optional(),
+                tamanhoNome: z.string().optional()
+            }))
+        }))
+    })),
+    direcionamentos: z.array(z.object({
+        id: z.string().uuid(),
+        faccaoId: z.string().uuid(),
+        faccaoNome: z.string().optional(),
+        tipoServico: z.string(),
+        status: z.string(),
+        dataPrevisaoRetorno: z.string().datetime().nullable().optional()
     })).optional()
 });
 
@@ -123,6 +162,7 @@ const direcionamentoItemSchema = z.object({
     direcionamentoId: z.string().uuid(),
     estoqueCorteId: z.string().uuid(),
     quantidade: z.number().int(),
+    valorFaccaoPorPeca: z.number().nullable().optional(),
     estoqueCorte: estoqueCorteResumoSchema.extend({
         lote: loteSchema.pick({ id: true, codigoLote: true, status: true, tecido: true, responsavel: true }).optional()
     }).optional()
@@ -147,6 +187,7 @@ const direcionamentoListItemSchema = z.object({
     status: z.string(),
     tipoServico: z.enum(["costura", "corte"]),
     quantidade: z.number().int(),
+    valorTotalEstimado: z.number(),
     dataSaida: z.string().datetime(),
     dataPrevisaoRetorno: z.string().datetime(),
     faccao: z.object({
@@ -157,6 +198,8 @@ const direcionamentoListItemSchema = z.object({
     items: z.array(z.object({
         id: z.string().uuid(),
         quantidade: z.number().int(),
+        valorFaccaoPorPeca: z.number().nullable().optional(),
+        valorEstimadoItem: z.number(),
         produto: z.object({
             id: z.string().uuid(),
             nome: z.string(),
@@ -802,12 +845,12 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         }
     });
 
-    // PUT /direcionamentos/{id} - Atualizar direcionamento
+    // PUT /direcionamentos/{id} - Atualizar remessa (status separado)
     registry.registerPath({
         method: 'put',
         path: '/direcionamentos/{id}',
         tags: [TAG_DIRECIONAMENTOS],
-        summary: 'Atualizar direcionamento',
+        summary: 'Atualizar remessa (itens, facção e tipo de serviço)',
         request: {
             body: {
                 content: {
@@ -824,6 +867,84 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         responses: {
             200: {
                 description: 'Direcionamento atualizado',
+                content: {
+                    'application/json': {
+                        schema: direcionamentoSchema
+                    }
+                }
+            },
+            404: {
+                description: 'Direcionamento não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
+            }
+        }
+    });
+
+    // PUT /direcionamentos/{id}/status - Atualizar status do direcionamento
+    registry.registerPath({
+        method: 'put',
+        path: '/direcionamentos/{id}/status',
+        tags: [TAG_DIRECIONAMENTOS],
+        summary: 'Atualizar status da remessa',
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: updateDirecionamentoStatusSchema.shape.body
+                    }
+                }
+            },
+            params: z.object({
+                id: z.uuid()
+            })
+        },
+        security: [{ bearerAuth: [] }],
+        responses: {
+            200: {
+                description: 'Status atualizado',
+                content: {
+                    'application/json': {
+                        schema: direcionamentoSchema
+                    }
+                }
+            },
+            404: {
+                description: 'Direcionamento não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
+            }
+        }
+    });
+
+    // PUT /direcionamentos/{id}/skuPrice - Atualizar preço por SKU
+    registry.registerPath({
+        method: 'put',
+        path: '/direcionamentos/{id}/skuPrice',
+        tags: [TAG_DIRECIONAMENTOS],
+        summary: 'Atualizar preço da facção por SKU',
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: updateDirecionamentoSkuPriceSchema.shape.body
+                    }
+                }
+            },
+            params: z.object({
+                id: z.uuid()
+            })
+        },
+        security: [{ bearerAuth: [] }],
+        responses: {
+            200: {
+                description: 'Preço por SKU atualizado',
                 content: {
                     'application/json': {
                         schema: direcionamentoSchema

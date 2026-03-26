@@ -12,26 +12,7 @@ const enfestoUpdateProducaoSchema = z.object({
     rolosProducao: z.array(z.object({
         estoqueRoloId: z.uuid("ID de rolo inválido"),
         pesoReservado: z.number().positive("Peso reservado deve ser positivo"),
-    })).optional(),
-    itens: z.array(loteItemEntradaSchema).optional(),
-}).superRefine((data, ctx) => {
-    if (data.qtdFolhas > 0) {
-        if (!data.rolosProducao || data.rolosProducao.length === 0) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["rolosProducao"],
-                message: "Informe ao menos um rolo por enfesto."
-            });
-        }
-
-        if (!data.itens || data.itens.length === 0) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["itens"],
-                message: "Informe ao menos um item por enfesto."
-            });
-        }
-    }
+    })).min(1, "Informe ao menos um rolo por enfesto."),
 });
 
 const enfestoComItensSchema = z.object({
@@ -70,7 +51,6 @@ export const createLoteProducaoSchema = z.object({
     body: z.object({
         codigoLote: z.string().min(1, "Código do lote é obrigatório"),
         responsavelId: z.uuid("ID de responsável inválido"),
-        status: z.enum(["planejado", "em_producao", "concluido", "cancelado"]).optional(),
         observacao: z.string().optional(),
         rolos: z.array(z.object({
             estoqueRoloId: z.uuid("ID de rolo inválido"),
@@ -84,13 +64,25 @@ export const updateLoteProducaoSchema = z.object({
         loteId: z.uuid("ID de lote inválido").optional(),
         codigoLote: z.string().min(1, "Código do lote é obrigatório").optional(),
         responsavelId: z.uuid("ID de responsável inválido").optional(),
-        status: z.string().optional(),
+        status: z.enum(["lote_criado", "enfesto", "cortado"]).optional(),
         observacao: z.string().optional(),
+        gradeItens: z.array(loteItemEntradaSchema).min(1, "Informe ao menos um item na grade.").optional(),
         enfestos: z.array(enfestoUpdateProducaoSchema).optional(),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),
     }),
+}).superRefine((data, ctx) => {
+    const enfestos = data.body.enfestos ?? [];
+    const existeEnfestoComFolhas = enfestos.some((enfesto) => enfesto.qtdFolhas > 0);
+
+    if (existeEnfestoComFolhas && (!data.body.gradeItens || data.body.gradeItens.length === 0)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["body", "gradeItens"],
+            message: "Informe gradeItens quando houver enfestos com qtdFolhas maior que zero."
+        });
+    }
 });
 
 export const addLoteItemsSchema = z.object({
@@ -107,8 +99,6 @@ export const createDirecionamentoSchema = z.object({
         direcionamentos: z.array(z.object({
             faccaoId: z.uuid("ID de facção inválido"),
             tipoServico: z.enum(["costura", "corte"]),
-            dataSaida: z.coerce.date().optional(),
-            dataPrevisaoRetorno: z.coerce.date().optional(),
             items: z.array(z.object({
                 estoqueCorteId: z.uuid("ID de estoque de corte inválido"),
                 quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
@@ -119,7 +109,35 @@ export const createDirecionamentoSchema = z.object({
 
 export const updateDirecionamentoSchema = z.object({
     body: z.object({
-        status: z.enum(["enviado", "em_processamento", "recebido", "cancelado"]).optional(),
+        direcionamentos: z.array(z.object({
+            faccaoId: z.uuid("ID de facção inválido"),
+            tipoServico: z.enum(["costura", "corte"]),
+            items: z.array(z.object({
+                estoqueCorteId: z.uuid("ID de estoque de corte inválido"),
+                quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
+            })).min(1, "Informe ao menos um item por direcionamento."),
+        })).length(1, "Informe exatamente um direcionamento para atualização."),
+    }),
+    params: z.object({
+        id: z.uuid("ID inválido"),
+    }),
+});
+
+export const updateDirecionamentoStatusSchema = z.object({
+    body: z.object({
+        status: z.enum(["separado", "em_producao", "entregue"]),
+    }),
+    params: z.object({
+        id: z.uuid("ID inválido"),
+    }),
+});
+
+export const updateDirecionamentoSkuPriceSchema = z.object({
+    body: z.object({
+        produtoSKU: z.array(z.object({
+            sku: z.string().min(1, "SKU é obrigatório"),
+            valorFaccaoPorPeca: z.coerce.number().positive("Valor por peça deve ser maior que zero"),
+        })).min(1, "Informe ao menos um SKU para atualizar o preço."),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),

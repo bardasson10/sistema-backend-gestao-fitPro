@@ -1,5 +1,13 @@
 import { Request, Response } from "express";
-import { CreateDirecionamentoService, ListAllDirecionamentoService, ListByIdDirecionamentoService, UpdateDirecionamentoService, DeleteDirecionamentoService } from "../../services/producao/DirecionamentoService";
+import {
+    CreateDirecionamentoService,
+    ListAllDirecionamentoService,
+    ListByIdDirecionamentoService,
+    UpdateDirecionamentoService,
+    UpdateDirecionamentoStatusService,
+    UpdateDirecionamentoSkuPriceService,
+    DeleteDirecionamentoService
+} from "../../services/producao/DirecionamentoService";
 import { ListarGradesSobraService } from "../../services/producao/ListarGradesSobraService";
 
 class CreateDirecionamentoController {
@@ -30,10 +38,32 @@ class ListByIdDirecionamentoController {
 
 class UpdateDirecionamentoController {
     async handle(req: Request, res: Response) {
-        const id = req.params.id as string 
-        const { status } = req.body;
+        const id = req.params.id as string;
+        const { direcionamentos } = req.body;
         const direcionamento = await new UpdateDirecionamentoService().execute(id, {
+            direcionamentos
+        });
+        return res.json(direcionamento);
+    }
+}
+
+class UpdateDirecionamentoStatusController {
+    async handle(req: Request, res: Response) {
+        const id = req.params.id as string;
+        const { status } = req.body;
+        const direcionamento = await new UpdateDirecionamentoStatusService().execute(id, {
             status
+        });
+        return res.json(direcionamento);
+    }
+}
+
+class UpdateDirecionamentoSkuPriceController {
+    async handle(req: Request, res: Response) {
+        const id = req.params.id as string;
+        const { produtoSKU } = req.body;
+        const direcionamento = await new UpdateDirecionamentoSkuPriceService().execute(id, {
+            produtoSKU
         });
         return res.json(direcionamento);
     }
@@ -55,4 +85,13 @@ class ListarGradesSobraController {
     }
 }
 
-export { CreateDirecionamentoController, ListAllDirecionamentoController, ListByIdDirecionamentoController, UpdateDirecionamentoController, DeleteDirecionamentoController, ListarGradesSobraController };
+export {
+    CreateDirecionamentoController,
+    ListAllDirecionamentoController,
+    ListByIdDirecionamentoController,
+    UpdateDirecionamentoController,
+    UpdateDirecionamentoStatusController,
+    UpdateDirecionamentoSkuPriceController,
+    DeleteDirecionamentoController,
+    ListarGradesSobraController
+};

@@ -340,6 +340,7 @@ model DirecionamentoItem {
   direcionamentoId  String   @map("direcionamento_id")
   estoqueCorteId    String   @map("estoque_corte_id") // A ponte magica!
   quantidade        Int // Quantidade que esta sendo tirada do estoque e enviada
+  valorFaccaoPorPeca Decimal? @map("valor_faccao_por_peca") @db.Decimal(10, 2)
 
   direcionamento    Direcionamento @relation(fields: [direcionamentoId], references: [id], onDelete: Cascade)
   estoqueCorte      EstoqueCorte   @relation(fields: [estoqueCorteId], references: [id])
