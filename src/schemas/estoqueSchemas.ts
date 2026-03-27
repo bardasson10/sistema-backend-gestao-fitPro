@@ -38,11 +38,57 @@ export const createMovimentacaoEstoqueSchema = z.object({
 
 export const listMovimentacaoSchema = z.object({
     query: z.object({
+        tecidoId: z.uuid().optional(),
+        situacao: z.enum(["disponivel", "reservado", "em_uso", "descartado"]).optional(),
         estoqueRoloId: z.uuid().optional(),
-        tipoMovimentacao: z.string().optional(),
-        dataInicio: z.date().optional(),
-        dataFim: z.date().optional(),
+        fornecedorId: z.uuid().optional(),
+        tipoMovimentacao: z.enum(["entrada", "saida", "ajuste", "devolucao"]).optional(),
+        dataInicio: z.coerce.date().optional(),
+        dataFim: z.coerce.date().optional(),
+        page: z.string().regex(/^\d+$/, "Page deve ser numerico").optional(),
+        limit: z.string().regex(/^\d+$/, "Limit deve ser numerico").optional(),
     }),
+});
+
+export const movimentacaoFornecedorSchema = z.object({
+    id: z.uuid(),
+    nome: z.string(),
+    tipo: z.string().nullable().optional(),
+    tecido: z.object({
+        id: z.uuid(),
+        nome: z.string(),
+        codigoReferencia: z.string().nullable().optional(),
+        cor: z.object({
+            id: z.uuid(),
+            nome: z.string(),
+            codigoHex: z.string().nullable().optional()
+        })
+    })
+});
+
+export const movimentacaoDataItemSchema = z.object({
+    id: z.uuid(),
+    tipoMovimentacao: z.string(),
+    pesoMovimentado: z.number(),
+    rolo: z.object({
+        id: z.uuid(),
+        codigoBarraRolo: z.string().nullable().optional(),
+        fornecedor: movimentacaoFornecedorSchema
+    }),
+    reponsavel: z.object({
+        id: z.uuid(),
+        nome: z.string()
+    })
+});
+
+export const movimentacaoDataResponseSchema = z.object({
+    data: z.array(movimentacaoDataItemSchema),
+    pagination: z.object({
+        total: z.number().int(),
+        page: z.number().int(),
+        limit: z.number().int(),
+        pages: z.number().int()
+    })
 });
 
 export const listEstoqueCorteSchema = z.object({
@@ -63,5 +109,14 @@ export const ajusteEstoqueCorteSchema = z.object({
     }),
     params: z.object({
         id: z.uuid("ID invalido"),
+    }),
+});
+
+export const getResumoEstoqueRolosSchema = z.object({
+    query: z.object({
+        fornecedorId: z.uuid().optional(),
+        tecidoId: z.uuid().optional(),
+        page: z.string().regex(/^\d+$/, "Page deve ser numerico").optional(),
+        limit: z.string().regex(/^\d+$/, "Limit deve ser numerico").optional(),
     }),
 });

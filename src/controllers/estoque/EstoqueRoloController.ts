@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { CreateEstoqueRoloService, ListAllEstoqueRoloService, ListByIdEstoqueRoloService, UpdateEstoqueRoloService, DeleteEstoqueRoloService, GetRelatorioEstoqueService } from "../../services/estoque/EstoqueRoloService";
+import { CreateEstoqueRoloService, ListAllEstoqueRoloService, ListByIdEstoqueRoloService, UpdateEstoqueRoloService, DeleteEstoqueRoloService, GetRelatorioEstoqueService, GetResumoEstoqueRolosService } from "../../services/estoque/EstoqueRoloService";
 
 class CreateEstoqueRoloController {
     async handle(req: Request, res: Response) {
@@ -21,8 +21,18 @@ class CreateEstoqueRoloController {
 
 class ListAllEstoqueRoloController {
     async handle(req: Request, res: Response) {
-        const { tecidoId, situacao, page, limit } = req.query;
-        const rolos = await new ListAllEstoqueRoloService().execute(tecidoId as string, situacao as string, page as string | number | undefined, limit as string);
+        const { tecidoId, situacao, page, limit, estoqueRoloId, fornecedorId, tipoMovimentacao, dataInicio, dataFim } = req.query;
+        const rolos = await new ListAllEstoqueRoloService().execute(
+            tecidoId as string,
+            situacao as string,
+            page as string | number | undefined,
+            limit as string,
+            estoqueRoloId as string,
+            fornecedorId as string,
+            tipoMovimentacao as string,
+            dataInicio as string,
+            dataFim as string
+        );
         return res.json(rolos);
     }
 }
@@ -58,10 +68,39 @@ class DeleteEstoqueRoloController {
 }
 
 class GetRelatorioEstoqueController {
-    async handle(_: Request, res: Response) {
-        const relatorio = await new GetRelatorioEstoqueService().execute();
+    async handle(req: Request, res: Response) {
+        const { tecidoId, situacao, estoqueRoloId, fornecedorId, tipoMovimentacao, dataInicio, dataFim, page, limit } = req.query;
+        const relatorio = await new GetRelatorioEstoqueService().execute(
+            tecidoId as string,
+            situacao as string,
+            estoqueRoloId as string,
+            fornecedorId as string,
+            tipoMovimentacao as string,
+            dataInicio as string,
+            dataFim as string,
+            page as string | number | undefined,
+            limit as string | number | undefined
+        );
         return res.json(relatorio);
     }
 }
 
-export { CreateEstoqueRoloController, ListAllEstoqueRoloController, ListByIdEstoqueRoloController, UpdateEstoqueRoloController, DeleteEstoqueRoloController, GetRelatorioEstoqueController };
+class GetResumoEstoqueRolosController {
+    async handle(req: Request, res: Response) {
+        const { fornecedorId, tecidoId, page, limit, situacao, estoqueRoloId, tipoMovimentacao, dataInicio, dataFim } = req.query;
+        const resumo = await new GetResumoEstoqueRolosService().execute(
+            fornecedorId as string,
+            tecidoId as string,
+            page as string | number | undefined,
+            limit as string | number | undefined,
+            situacao as string,
+            estoqueRoloId as string,
+            tipoMovimentacao as string,
+            dataInicio as string,
+            dataFim as string
+        );
+        return res.json(resumo);
+    }
+}
+
+export { CreateEstoqueRoloController, ListAllEstoqueRoloController, ListByIdEstoqueRoloController, UpdateEstoqueRoloController, DeleteEstoqueRoloController, GetRelatorioEstoqueController, GetResumoEstoqueRolosController };

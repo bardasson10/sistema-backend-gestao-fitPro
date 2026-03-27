@@ -15,6 +15,15 @@ const corSchema = z.object({
     codigoHex: z.string().nullable().optional()
 });
 
+const fornecedorSchema = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    tipo: z.string().nullable().optional(),
+    contato: z.string().nullable().optional(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime()
+});
+
 const tecidoResumoSchema = z.object({
     id: z.string().uuid(),
     nome: z.string()
@@ -99,25 +108,119 @@ const movimentacaoSchema = z.object({
     usuario: usuarioResumoSchema.optional()
 });
 
+const movimentacaoDataItemSchema = z.object({
+    id: z.string().uuid(),
+    tipoMovimentacao: z.string(),
+    pesoMovimentado: z.number(),
+    rolo: z.object({
+        id: z.string().uuid(),
+        codigoBarraRolo: z.string().nullable().optional(),
+        fornecedor: z.object({
+            id: z.string().uuid(),
+            nome: z.string(),
+            tipo: z.string().nullable().optional(),
+            tecido: z.object({
+                id: z.string().uuid(),
+                nome: z.string(),
+                codigoReferencia: z.string().nullable().optional(),
+                cor: z.object({
+                    id: z.string().uuid(),
+                    nome: z.string(),
+                    codigoHex: z.string().nullable().optional()
+                })
+            })
+        })
+    }),
+    reponsavel: z.object({
+        id: z.string().uuid(),
+        nome: z.string()
+    })
+});
+
+const movimentacaoDataResponseSchema = z.object({
+    data: z.array(movimentacaoDataItemSchema),
+    pagination: z.object({
+        total: z.number().int(),
+        page: z.number().int(),
+        limit: z.number().int(),
+        pages: z.number().int()
+    })
+});
+
 const estoqueRoloSchema = z.object({
     id: z.string().uuid(),
     tecidoId: z.string().uuid(),
     codigoBarraRolo: z.string().nullable().optional(),
-    pesoInicialKg: z.number(),
-    pesoAtualKg: z.number(),
+    pesoInicialKg: z.union([z.string(), z.number()]),
+    pesoAtualKg: z.union([z.string(), z.number()]),
     situacao: z.string(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
-    tecido: z.any().optional(),
+    tecido: z.object({
+        id: z.string().uuid(),
+        fornecedorId: z.string().uuid(),
+        corId: z.string().uuid(),
+        nome: z.string(),
+        codigoReferencia: z.string().nullable().optional(),
+        rendimentoMetroKg: z.union([z.string(), z.number()]).nullable().optional(),
+        larguraMetros: z.union([z.string(), z.number()]).nullable().optional(),
+        valorPorKg: z.union([z.string(), z.number()]).nullable().optional(),
+        gramatura: z.union([z.string(), z.number()]).nullable().optional(),
+        createdAt: z.string().datetime(),
+        updatedAt: z.string().datetime(),
+        fornecedor: fornecedorSchema,
+        cor: corSchema
+    }).optional(),
     movimentacoes: z.array(movimentacaoSchema).optional()
 });
 
+const estoqueRoloSemMovimentacoesSchema = z.object({
+    id: z.string().uuid(),
+    tecidoId: z.string().uuid(),
+    codigoBarraRolo: z.string().nullable().optional(),
+    pesoInicialKg: z.union([z.string(), z.number()]),
+    pesoAtualKg: z.union([z.string(), z.number()]),
+    situacao: z.string(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    tecido: z.object({
+        id: z.string().uuid(),
+        fornecedorId: z.string().uuid(),
+        corId: z.string().uuid(),
+        nome: z.string(),
+        codigoReferencia: z.string().nullable().optional(),
+        rendimentoMetroKg: z.union([z.string(), z.number()]).nullable().optional(),
+        larguraMetros: z.union([z.string(), z.number()]).nullable().optional(),
+        valorPorKg: z.union([z.string(), z.number()]).nullable().optional(),
+        gramatura: z.union([z.string(), z.number()]).nullable().optional(),
+        createdAt: z.string().datetime(),
+        updatedAt: z.string().datetime(),
+        fornecedor: fornecedorSchema,
+        cor: corSchema
+    }).optional()
+});
+
 const paginatedEstoqueRoloSchema = z.object({
-    data: z.array(estoqueRoloSchema),
-    total: z.number().int(),
-    page: z.number().int(),
-    limit: z.number().int(),
-    totalPages: z.number().int()
+    data: z.array(estoqueRoloSemMovimentacoesSchema),
+    pagination: z.object({
+        total: z.number().int(),
+        page: z.number().int(),
+        limit: z.number().int(),
+        totalPages: z.number().int(),
+        pages: z.number().int()
+    })
+});
+
+const estoqueFiltrosSyncQuerySchema = z.object({
+    tecidoId: z.uuid().optional(),
+    situacao: z.enum(['disponivel', 'reservado', 'em_uso', 'descartado']).optional(),
+    estoqueRoloId: z.uuid().optional(),
+    fornecedorId: z.uuid().optional(),
+    tipoMovimentacao: z.enum(['entrada', 'saida', 'ajuste', 'devolucao']).optional(),
+    dataInicio: z.string().datetime().optional(),
+    dataFim: z.string().datetime().optional(),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().optional()
 });
 
 export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
@@ -258,6 +361,9 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         tags: ['Estoque'],
         summary: 'Listar rolos de estoque',
         security: [{ bearerAuth: [] }],
+        request: {
+            query: estoqueFiltrosSyncQuerySchema
+        },
         responses: {
             200: {
                 description: 'Lista de rolos de estoque',
@@ -287,7 +393,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
                 description: 'Rolo de estoque encontrado',
                 content: {
                     'application/json': {
-                        schema: estoqueRoloSchema
+                        schema: estoqueRoloSemMovimentacoesSchema
                     }
                 }
             },
@@ -367,6 +473,9 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         tags: ['Estoque'],
         summary: 'Relatório geral de estoque',
         security: [{ bearerAuth: [] }],
+        request: {
+            query: estoqueFiltrosSyncQuerySchema
+        },
         responses: {
             200: {
                 description: 'Relatório do estoque',
@@ -381,6 +490,61 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
                             rolosReservados: z.number().int(),
                             rolosEmUso: z.number().int(),
                             movimentacoesMes: z.number().int()
+                        })
+                    }
+                }
+            }
+        }
+    });
+
+    // GET /estoque-rolos/resumo - Resumo de estoque agrupado por tecido
+    registry.registerPath({
+        method: 'get',
+        path: '/estoque-rolos/resumo',
+        tags: ['Estoque'],
+        summary: 'Resumo de estoque agrupado por tecido',
+        security: [{ bearerAuth: [] }],
+        request: {
+            query: z.object({
+                tecidoId: z.uuid().optional(),
+                situacao: z.enum(['disponivel', 'reservado', 'em_uso', 'descartado']).optional(),
+                estoqueRoloId: z.uuid().optional(),
+                fornecedorId: z.uuid().optional(),
+                tipoMovimentacao: z.enum(['entrada', 'saida', 'ajuste', 'devolucao']).optional(),
+                dataInicio: z.string().datetime().optional(),
+                dataFim: z.string().datetime().optional(),
+                page: z.coerce.number().int().positive().optional(),
+                limit: z.coerce.number().int().positive().optional()
+            })
+        },
+        responses: {
+            200: {
+                description: 'Resumo de estoque por tecido',
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            data: z.array(z.object({
+                                qtdTotalRolos: z.number().int(),
+                                pesoTotalRolos: z.number(),
+                                valorTotalRolos: z.number(),
+                                tecido: z.object({
+                                    id: z.string().uuid(),
+                                    nome: z.string(),
+                                    codigoReferencia: z.string().nullable().optional(),
+                                    cor: z.object({
+                                        id: z.string().uuid(),
+                                        nome: z.string(),
+                                        codigoHex: z.string().nullable().optional()
+                                    })
+                                })
+                            })),
+                            pagination: z.object({
+                                total: z.number().int(),
+                                page: z.number().int(),
+                                limit: z.number().int(),
+                                totalPages: z.number().int(),
+                                pages: z.number().int()
+                            })
                         })
                     }
                 }
@@ -430,12 +594,25 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         tags: ['Estoque'],
         summary: 'Listar movimentações de estoque',
         security: [{ bearerAuth: [] }],
+        request: {
+            query: z.object({
+                tecidoId: z.uuid().optional(),
+                situacao: z.enum(['disponivel', 'reservado', 'em_uso', 'descartado']).optional(),
+                estoqueRoloId: z.uuid().optional(),
+                fornecedorId: z.uuid().optional(),
+                tipoMovimentacao: z.enum(['entrada', 'saida', 'ajuste', 'devolucao']).optional(),
+                dataInicio: z.string().datetime().optional(),
+                dataFim: z.string().datetime().optional(),
+                page: z.coerce.number().int().positive().optional(),
+                limit: z.coerce.number().int().positive().optional()
+            })
+        },
         responses: {
             200: {
                 description: 'Lista de movimentações de estoque',
                 content: {
                     'application/json': {
-                        schema: z.array(movimentacaoSchema)
+                        schema: movimentacaoDataResponseSchema
                     }
                 }
             }
@@ -459,7 +636,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
                 description: 'Movimentação de estoque encontrada',
                 content: {
                     'application/json': {
-                        schema: movimentacaoSchema
+                        schema: movimentacaoDataResponseSchema
                     }
                 }
             },
@@ -486,7 +663,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
                 description: 'Histórico de movimentações do rolo',
                 content: {
                     'application/json': {
-                        schema: z.array(movimentacaoSchema)
+                        schema: movimentacaoDataResponseSchema
                     }
                 }
             },

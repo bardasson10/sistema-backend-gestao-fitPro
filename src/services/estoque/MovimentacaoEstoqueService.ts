@@ -2,6 +2,35 @@ import { ICreateMovimentacaoEstoqueRequest } from "../../interfaces/IEstoque";
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
+const mapMovimentacaoResponse = (mov: any) => ({
+    id: mov.id,
+    tipoMovimentacao: mov.tipoMovimentacao,
+    pesoMovimentado: mov.pesoMovimentado ? Number(mov.pesoMovimentado.toString()) : 0,
+    rolo: {
+        id: mov.rolo?.id,
+        codigoBarraRolo: mov.rolo?.codigoBarraRolo,
+        fornecedor: {
+            id: mov.rolo?.tecido?.fornecedor?.id,
+            nome: mov.rolo?.tecido?.fornecedor?.nome,
+            tipo: mov.rolo?.tecido?.fornecedor?.tipo,
+            tecido: {
+                id: mov.rolo?.tecido?.id,
+                nome: mov.rolo?.tecido?.nome,
+                codigoReferencia: mov.rolo?.tecido?.codigoReferencia,
+                cor: {
+                    id: mov.rolo?.tecido?.cor?.id,
+                    nome: mov.rolo?.tecido?.cor?.nome,
+                    codigoHex: mov.rolo?.tecido?.cor?.codigoHex
+                }
+            }
+        }
+    },
+    reponsavel: {
+        id: mov.usuario?.id,
+        nome: mov.usuario?.nome
+    }
+});
+
 class CreateMovimentacaoEstoqueService {
     async execute(usuarioId: string, { estoqueRoloId, tipoMovimentacao, pesoMovimentado }: ICreateMovimentacaoEstoqueRequest) {
         const peso = Number(pesoMovimentado);
@@ -76,7 +105,17 @@ class CreateMovimentacaoEstoqueService {
 }
 
 class ListAllMovimentacaoEstoqueService {
-    async execute(estoqueRoloId?: string, tipoMovimentacao?: string, dataInicio?: string, dataFim?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+    async execute(
+        estoqueRoloId?: string,
+        tipoMovimentacao?: string,
+        dataInicio?: string,
+        dataFim?: string,
+        page?: number | string,
+        limit?: number | string,
+        fornecedorId?: string,
+        tecidoId?: string,
+        situacao?: string
+    ): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
         const [movimentacoes, total] = await Promise.all([
@@ -84,6 +123,21 @@ class ListAllMovimentacaoEstoqueService {
                 where: {
                     ...(estoqueRoloId && { estoqueRoloId }),
                     ...(tipoMovimentacao && { tipoMovimentacao }),
+                    ...((fornecedorId || tecidoId || situacao) && {
+                        rolo: {
+                            is: {
+                                ...(tecidoId && { tecidoId }),
+                                ...(situacao && { situacao }),
+                                ...(fornecedorId && {
+                                    tecido: {
+                                        is: {
+                                            fornecedorId
+                                        }
+                                    }
+                                })
+                            }
+                        }
+                    }),
                     ...(dataInicio || dataFim ? {
                         createdAt: {
                             ...(dataInicio && { gte: new Date(dataInicio) }),
@@ -94,7 +148,12 @@ class ListAllMovimentacaoEstoqueService {
                 include: {
                     rolo: {
                         include: {
-                            tecido: true
+                            tecido: {
+                                include: {
+                                    fornecedor: true,
+                                    cor: true
+                                }
+                            }
                         }
                     },
                     usuario: {
@@ -117,6 +176,21 @@ class ListAllMovimentacaoEstoqueService {
                 where: {
                     ...(estoqueRoloId && { estoqueRoloId }),
                     ...(tipoMovimentacao && { tipoMovimentacao }),
+                    ...((fornecedorId || tecidoId || situacao) && {
+                        rolo: {
+                            is: {
+                                ...(tecidoId && { tecidoId }),
+                                ...(situacao && { situacao }),
+                                ...(fornecedorId && {
+                                    tecido: {
+                                        is: {
+                                            fornecedorId
+                                        }
+                                    }
+                                })
+                            }
+                        }
+                    }),
                     ...(dataInicio || dataFim ? {
                         createdAt: {
                             ...(dataInicio && { gte: new Date(dataInicio) }),
@@ -127,7 +201,8 @@ class ListAllMovimentacaoEstoqueService {
             })
         ]);
 
-        return createPaginatedResponse(movimentacoes, total, pageNumber, pageLimit);
+        const pagination = createPaginatedResponse(movimentacoes.map(mapMovimentacaoResponse), total, pageNumber, pageLimit);
+        return pagination;
     }
 }
 
@@ -138,7 +213,12 @@ class ListByIdMovimentacaoEstoqueService {
             include: {
                 rolo: {
                     include: {
-                        tecido: true
+                        tecido: {
+                            include: {
+                                fornecedor: true,
+                                cor: true
+                            }
+                        }
                     }
                 },
                 usuario: {
@@ -156,7 +236,9 @@ class ListByIdMovimentacaoEstoqueService {
             throw new Error("Movimentação não encontrada.");
         }
 
-        return movimentacao;
+        return {
+            data: [mapMovimentacaoResponse(movimentacao)]
+        };
     }
 }
 
@@ -173,6 +255,16 @@ class GetHistoricoRoloService {
         const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
             where: { estoqueRoloId },
             include: {
+                rolo: {
+                    include: {
+                        tecido: {
+                            include: {
+                                fornecedor: true,
+                                cor: true
+                            }
+                        }
+                    }
+                },
                 usuario: {
                     select: {
                         id: true,
@@ -187,34 +279,8 @@ class GetHistoricoRoloService {
             }
         });
 
-        let pesoRastreado = rolo.pesoInicialKg;
-        const historico = movimentacoes.map((mov) => {
-            let novoPheso = pesoRastreado;
-            const peso = typeof mov.pesoMovimentado === 'number' ? mov.pesoMovimentado : mov.pesoMovimentado?.toNumber() || 0;
-
-            if (mov.tipoMovimentacao === "entrada") {
-                novoPheso = pesoRastreado.plus(peso);
-            } else if (mov.tipoMovimentacao === "saida" || mov.tipoMovimentacao === "devolucao") {
-                novoPheso = pesoRastreado.minus(peso);
-            } else if (mov.tipoMovimentacao === "ajuste") {
-                novoPheso = pesoRastreado.constructor(peso);
-            }
-
-            pesoRastreado = novoPheso;
-
-            return {
-                ...mov,
-                pesoAntesMovimentacao: (typeof pesoRastreado === 'number' ? pesoRastreado : pesoRastreado?.toNumber?.() ?? 0) - (mov.tipoMovimentacao === "entrada" ? peso : 0),
-                pesoDepoisMovimentacao: novoPheso
-            };
-        });
-
         return {
-            rolo,
-            historico,
-            pesoAtual: rolo.pesoAtualKg,
-            pesoInicial: rolo.pesoInicialKg,
-            pesoConsumido: rolo.pesoInicialKg.toNumber() - rolo.pesoAtualKg.toNumber()
+            data: movimentacoes.map(mapMovimentacaoResponse)
         };
     }
 }
