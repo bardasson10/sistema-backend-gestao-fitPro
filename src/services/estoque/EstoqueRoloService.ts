@@ -160,7 +160,10 @@ class ListAllEstoqueRoloService {
             prismaClient.estoqueRolo.findMany({
                 where: {
                     ...(tecidoId && { tecidoId }),
-                    ...(situacao && { situacao })
+                    ...(situacao && { situacao }),
+                    pesoAtualKg: {
+                        gt: 0
+                    }
                 },
                 include: {
                     tecido: {
@@ -194,7 +197,10 @@ class ListAllEstoqueRoloService {
             prismaClient.estoqueRolo.count({
                 where: {
                     ...(tecidoId && { tecidoId }),
-                    ...(situacao && { situacao })
+                    ...(situacao && { situacao }),
+                    pesoAtualKg: {
+                        gt: 0
+                    }
                 }
             })
         ]);
@@ -365,7 +371,12 @@ class GetRelatorioEstoqueService {
 
         const totalRolos = rolos.length;
         const pesoTotal = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; }) => acc + parseFloat(rolo.pesoAtualKg.toString()), 0);
-        const rolosDisponíveis = rolos.filter((r: { situacao: string; }) => r.situacao === "disponivel").length;
+        const valorTotalEstoque = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; tecido: { valorPorKg: { toString: () => string; } | null; }; }) => {
+            const pesoAtualKg = parseFloat(rolo.pesoAtualKg.toString());
+            const valorPorKg = rolo.tecido?.valorPorKg ? parseFloat(rolo.tecido.valorPorKg.toString()) : 0;
+            return acc + (pesoAtualKg * valorPorKg);
+        }, 0);
+        const rolosDisponiveis = rolos.filter((r: { situacao: string; }) => r.situacao === "disponivel").length;
         const rolosReservados = rolos.filter((r: { situacao: string; }) => r.situacao === "reservado").length;
         const rolosEmUso = rolos.filter((r: { situacao: string; }) => r.situacao === "em_uso").length;
         const movimentacoesMes = movimentacoes.length;
@@ -388,8 +399,9 @@ class GetRelatorioEstoqueService {
         return {
             totalRolos,
             pesoTotal: parseFloat(pesoTotal.toFixed(3)),
+            valorTotalEstoque: parseFloat(valorTotalEstoque.toFixed(2)),
             tecidoComMaiorEstoque,
-            rolosDisponíveis,
+            rolosDisponiveis,
             rolosReservados,
             rolosEmUso,
             movimentacoesMes

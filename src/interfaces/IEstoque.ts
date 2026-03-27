@@ -48,8 +48,9 @@ export interface IMovimentacaoEstoqueResponse {
 export interface IRelatoriEstoqueResponse {
     totalRolos: number;
     pesoTotal: number;
+    valorTotalEstoque: number;
     tecidoComMaiorEstoque: string;
-    rolosDisponíveis: number;
+    rolosDisponiveis: number;
     rolosReservados: number;
     rolosEmUso: number;
     movimentacoesMes: number;
