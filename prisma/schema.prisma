@@ -324,6 +324,7 @@ model Direcionamento {
   status              String   @default("enviado")
   dataSaida           DateTime? @map("data_saida") @db.Date
   dataPrevisaoRetorno DateTime? @map("data_previsao_retorno") @db.Date
+  observacao          String?   @map("observacao")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 

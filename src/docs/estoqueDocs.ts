@@ -375,6 +375,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
                         schema: z.object({
                             totalRolos: z.number().int(),
                             pesoTotal: z.number(),
+                            valorTotalEstoque: z.number(),
                             tecidoComMaiorEstoque: z.string(),
                             rolosDisponiveis: z.number().int(),
                             rolosReservados: z.number().int(),
