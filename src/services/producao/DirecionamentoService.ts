@@ -7,6 +7,20 @@ import {
 import { parsePaginationParams, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
+type QueryFilterValue = string | string[] | undefined;
+
+function normalizarQueryParaArray(valor?: QueryFilterValue) {
+    if (!valor) {
+        return [] as string[];
+    }
+
+    const valores = Array.isArray(valor) ? valor : [valor];
+    return valores
+        .flatMap(item => String(item).split(","))
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
 function toNumber(value: unknown): number | null {
     if (value == null) {
         return null;
@@ -69,6 +83,101 @@ const direcionamentoInclude = {
         }
     }
 } as const;
+
+const direcionamentoListSelect = {
+    id: true,
+    status: true,
+    tipoServico: true,
+    quantidade: true,
+    dataSaida: true,
+    dataPrevisaoRetorno: true,
+    createdAt: true,
+    faccao: {
+        select: {
+            id: true,
+            nome: true,
+            responsavel: true
+        }
+    },
+    items: {
+        select: {
+            id: true,
+            quantidade: true,
+            valorFaccaoPorPeca: true,
+            estoqueCorte: {
+                select: {
+                    produto: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            sku: true
+                        }
+                    },
+                    cor: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            codigoHex: true
+                        }
+                    },
+                    tamanho: {
+                        select: {
+                            nome: true
+                        }
+                    },
+                    lote: {
+                        select: {
+                            id: true,
+                            codigoLote: true
+                        }
+                    }
+                }
+            }
+        }
+    }
+} as const;
+
+function mapDirecionamentoParaListagem(direcionamento: any) {
+    return {
+        valorTotalEstimado: direcionamento.items.reduce((sum: number, item: any) => {
+            const valorPorPeca = toNumber(item.valorFaccaoPorPeca) ?? 0;
+            return sum + (item.quantidade * valorPorPeca);
+        }, 0),
+        id: direcionamento.id,
+        status: direcionamento.status,
+        tipoServico: direcionamento.tipoServico,
+        quantidade: direcionamento.quantidade,
+        dataSaida: direcionamento.dataSaida,
+        dataPrevisaoRetorno: direcionamento.dataPrevisaoRetorno,
+        faccao: {
+            id: direcionamento.faccao.id,
+            nome: direcionamento.faccao.nome,
+            responsavel: direcionamento.faccao.responsavel ?? ""
+        },
+        items: direcionamento.items.map((item: any) => ({
+            valorFaccaoPorPeca: toNumber(item.valorFaccaoPorPeca),
+            valorEstimadoItem: item.quantidade * (toNumber(item.valorFaccaoPorPeca) ?? 0),
+            id: item.id,
+            quantidade: item.quantidade,
+            produto: {
+                id: item.estoqueCorte.produto.id,
+                nome: item.estoqueCorte.produto.nome,
+                sku: item.estoqueCorte.produto.sku,
+                cor: {
+                    id: item.estoqueCorte.cor.id,
+                    nome: item.estoqueCorte.cor.nome,
+                    codigoHex: item.estoqueCorte.cor.codigoHex ?? ""
+                },
+                tamanho: item.estoqueCorte.tamanho.nome
+            },
+            lote: {
+                id: item.estoqueCorte.lote.id,
+                codigoLote: item.estoqueCorte.lote.codigoLote
+            }
+        })),
+        createdAt: direcionamento.createdAt
+    };
+}
 
 function mapQuantidadeSolicitadaPorEstoque(direcionamentos: ICreateDirecionamentoRequest["direcionamentos"]) {
     const quantidadePorEstoque = new Map<string, number>();
@@ -144,6 +253,10 @@ class CreateDirecionamentoService {
             const estoque = estoquePorId.get(estoqueCorteId);
             if (!estoque) {
                 throw new Error("Item de estoque de corte nao encontrado.");
+            }
+
+            if (estoque.lote.status !== "cortado") {
+                throw new Error(`Nao e permitido enviar para remessa itens de lote ainda nao cortado. Lote ${estoque.lote.id} com status '${estoque.lote.status}'.`);
             }
 
             if (quantidadeSolicitada > estoque.quantidadeDisponivel) {
@@ -222,68 +335,19 @@ class CreateDirecionamentoService {
 }
 
 class ListAllDirecionamentoService {
-    async execute(status?: string, faccaoId?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+    async execute(status?: QueryFilterValue, faccaoId?: QueryFilterValue, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+
+        const statusArray = normalizarQueryParaArray(status);
+        const faccaoIdArray = normalizarQueryParaArray(faccaoId);
 
         const [direcionamentos, total] = await Promise.all([
             prismaClient.direcionamento.findMany({
                 where: {
-                    ...(status && { status }),
-                    ...(faccaoId && { faccaoId })
+                    ...(statusArray.length > 0 && { status: { in: statusArray } }),
+                    ...(faccaoIdArray.length > 0 && { faccaoId: { in: faccaoIdArray } })
                 },
-                select: {
-                    id: true,
-                    status: true,
-                    tipoServico: true,
-                    quantidade: true,
-                    dataSaida: true,
-                    dataPrevisaoRetorno: true,
-                    createdAt: true,
-                    faccao: {
-                        select: {
-                            id: true,
-                            nome: true,
-                            responsavel: true,
-                            prazoMedioDias: true
-                        }
-                    },
-                    items: {
-                        select: {
-                            id: true,
-                            quantidade: true,
-                            valorFaccaoPorPeca: true,
-                            estoqueCorte: {
-                                select: {
-                                    produto: {
-                                        select: {
-                                            id: true,
-                                            nome: true,
-                                            sku: true
-                                        }
-                                    },
-                                    cor: {
-                                        select: {
-                                            id: true,
-                                            nome: true,
-                                            codigoHex: true
-                                        }
-                                    },
-                                    tamanho: {
-                                        select: {
-                                            nome: true
-                                        }
-                                    },
-                                    lote: {
-                                        select: {
-                                            id: true,
-                                            codigoLote: true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
+                select: direcionamentoListSelect,
                 skip,
                 take: pageLimit,
                 orderBy: {
@@ -292,62 +356,13 @@ class ListAllDirecionamentoService {
             }),
             prismaClient.direcionamento.count({
                 where: {
-                    ...(status && { status }),
-                    ...(faccaoId && { faccaoId })
+                    ...(statusArray.length > 0 && { status: { in: statusArray } }),
+                    ...(faccaoIdArray.length > 0 && { faccaoId: { in: faccaoIdArray } })
                 }
             })
         ]);
 
-        const data = direcionamentos.map((direcionamento) => ({
-            ...(() => {
-                const dataSaidaCalculada = direcionamento.dataSaida ?? direcionamento.createdAt;
-                const dataPrevisaoCalculada = direcionamento.dataPrevisaoRetorno ?? (() => {
-                    const previsao = new Date(dataSaidaCalculada);
-                    previsao.setDate(previsao.getDate() + (direcionamento.faccao.prazoMedioDias ?? 0));
-                    return previsao;
-                })();
-
-                return {
-                    dataSaida: dataSaidaCalculada.toISOString(),
-                    dataPrevisaoRetorno: dataPrevisaoCalculada.toISOString()
-                };
-            })(),
-            valorTotalEstimado: direcionamento.items.reduce((sum, item) => {
-                const valorPorPeca = toNumber(item.valorFaccaoPorPeca) ?? 0;
-                return sum + (item.quantidade * valorPorPeca);
-            }, 0),
-            id: direcionamento.id,
-            status: direcionamento.status,
-            tipoServico: direcionamento.tipoServico,
-            quantidade: direcionamento.quantidade,
-            faccao: {
-                id: direcionamento.faccao.id,
-                nome: direcionamento.faccao.nome,
-                responsavel: direcionamento.faccao.responsavel ?? ""
-            },
-            items: direcionamento.items.map((item) => ({
-                valorFaccaoPorPeca: toNumber(item.valorFaccaoPorPeca),
-                valorEstimadoItem: item.quantidade * (toNumber(item.valorFaccaoPorPeca) ?? 0),
-                id: item.id,
-                quantidade: item.quantidade,
-                produto: {
-                    id: item.estoqueCorte.produto.id,
-                    nome: item.estoqueCorte.produto.nome,
-                    sku: item.estoqueCorte.produto.sku,
-                    cor: {
-                        id: item.estoqueCorte.cor.id,
-                        nome: item.estoqueCorte.cor.nome,
-                        codigoHex: item.estoqueCorte.cor.codigoHex ?? ""
-                    },
-                    tamanho: item.estoqueCorte.tamanho.nome
-                },
-                lote: {
-                    id: item.estoqueCorte.lote.id,
-                    codigoLote: item.estoqueCorte.lote.codigoLote
-                }
-            })),
-            createdAt: direcionamento.createdAt
-        }));
+        const data = direcionamentos.map(mapDirecionamentoParaListagem);
 
         const totalPages = Math.ceil(total / pageLimit);
 
@@ -368,14 +383,14 @@ class ListByIdDirecionamentoService {
     async execute(id: string) {
         const direcionamento = await prismaClient.direcionamento.findUnique({
             where: { id },
-            include: direcionamentoInclude
+            select: direcionamentoListSelect
         });
 
         if (!direcionamento) {
             throw new Error("Direcionamento nao encontrado.");
         }
 
-        return direcionamento;
+        return mapDirecionamentoParaListagem(direcionamento);
     }
 }
 
@@ -437,9 +452,13 @@ class UpdateDirecionamentoService {
         const todosEstoqueIds = [...new Set([...quantidadeAntiga.keys(), ...quantidadeNova.keys()])];
         const estoques = await prismaClient.estoqueCorte.findMany({
             where: { id: { in: todosEstoqueIds } },
-            select: {
-                id: true,
-                quantidadeDisponivel: true
+            include: {
+                lote: {
+                    select: {
+                        id: true,
+                        status: true
+                    }
+                }
             }
         });
 
@@ -456,10 +475,18 @@ class UpdateDirecionamentoService {
             const diferenca = novo - anterior;
             diferencas.set(estoqueId, diferenca);
 
+            const estoque = estoquePorId.get(estoqueId);
+            if (!estoque) {
+                throw new Error("Item de estoque de corte nao encontrado.");
+            }
+
+            if (estoque.lote.status !== "cortado") {
+                throw new Error(`Nao e permitido atualizar remessa com itens de lote ainda nao cortado. Lote ${estoque.lote.id} com status '${estoque.lote.status}'.`);
+            }
+
             if (diferenca > 0) {
-                const estoque = estoquePorId.get(estoqueId);
-                if (!estoque || diferenca > estoque.quantidadeDisponivel) {
-                    throw new Error(`Estoque insuficiente para o item ${estoqueId}. Disponivel: ${estoque?.quantidadeDisponivel ?? 0}.`);
+                if (diferenca > estoque.quantidadeDisponivel) {
+                    throw new Error(`Estoque insuficiente para o item ${estoqueId}. Disponivel: ${estoque.quantidadeDisponivel}.`);
                 }
             }
         }

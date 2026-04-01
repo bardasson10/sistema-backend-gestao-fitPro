@@ -43,7 +43,8 @@ import {
 	UpdateDirecionamentoStatusController,
 	UpdateDirecionamentoSkuPriceController,
 	DeleteDirecionamentoController,
-	ListarGradesSobraController
+	ListarGradesSobraController,
+	ListRemessasProntasController
 } from "./controllers/producao/DirecionamentoController";
 import { CreateConferenciaController, ListAllConferenciaController, ListByIdConferenciaController, UpdateConferenciaController, DeleteConferenciaController, GetRelatorioProdutividadeController } from "./controllers/producao/ConferenciaController";
 import {
@@ -58,7 +59,8 @@ import {
 	updateDirecionamentoStatusSchema,
 	updateDirecionamentoSkuPriceSchema,
 	createConferenciaSchema,
-	updateConferenciaSchema
+	updateConferenciaSchema,
+	listConferenciaSchema
 } from "./schemas/producaoSchemas";
 
 
@@ -160,6 +162,7 @@ router.delete("/lotes-producao/:id", isAuthenticated, isAdmin, new DeleteLotePro
 // ==================== DIRECIONAMENTOS ====================
 router.post("/direcionamentos", isAuthenticated, validateSchema(createDirecionamentoSchema), new CreateDirecionamentoController().handle);
 router.get("/direcionamentos", isAuthenticated, new ListAllDirecionamentoController().handle);
+router.get("/direcionamentos/prontas", isAuthenticated, new ListRemessasProntasController().handle);
 router.get("/direcionamentos/:id", isAuthenticated, new ListByIdDirecionamentoController().handle);
 router.put("/direcionamentos/:id", isAuthenticated, validateSchema(updateDirecionamentoSchema), new UpdateDirecionamentoController().handle);
 router.put("/direcionamentos/:id/status", isAuthenticated, validateSchema(updateDirecionamentoStatusSchema), new UpdateDirecionamentoStatusController().handle);
@@ -169,7 +172,7 @@ router.get("/lotes/:loteId/sobras", isAuthenticated, new ListarGradesSobraContro
 
 // ==================== CONFERÊNCIAS ====================
 router.post("/conferencias", isAuthenticated, validateSchema(createConferenciaSchema), new CreateConferenciaController().handle);
-router.get("/conferencias", isAuthenticated, new ListAllConferenciaController().handle);
+router.get("/conferencias", isAuthenticated, validateSchema(listConferenciaSchema), new ListAllConferenciaController().handle);
 router.get("/conferencias/:id", isAuthenticated, new ListByIdConferenciaController().handle);
 router.put("/conferencias/:id", isAuthenticated, validateSchema(updateConferenciaSchema), new UpdateConferenciaController().handle);
 router.delete("/conferencias/:id", isAuthenticated, isAdmin, new DeleteConferenciaController().handle);

@@ -21,9 +21,20 @@ class CreateConferenciaController {
 class ListAllConferenciaController {
     async handle(req: Request, res: Response) {
         const { statusQualidade, liberadoPagamento, page, limit } = req.query;
+
+        const statusQualidadeFiltro = typeof statusQualidade === "string" ? statusQualidade : undefined;
+        const liberadoPagamentoFiltro =
+            typeof liberadoPagamento === "string"
+                ? liberadoPagamento === "true"
+                    ? true
+                    : liberadoPagamento === "false"
+                        ? false
+                        : undefined
+                : undefined;
+
         const conferencias = await new ListAllConferenciaService().execute(
-            statusQualidade as string,
-            liberadoPagamento === "true",
+            statusQualidadeFiltro,
+            liberadoPagamentoFiltro,
             page as string | number | undefined,
             limit as string | number | undefined
         );

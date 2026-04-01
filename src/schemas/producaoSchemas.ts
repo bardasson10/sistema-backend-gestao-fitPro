@@ -179,6 +179,15 @@ export const updateConferenciaSchema = z.object({
     }),
 });
 
+export const listConferenciaSchema = z.object({
+    query: z.object({
+        page: z.coerce.number().int().positive().optional(),
+        limit: z.coerce.number().int().positive().optional(),
+        statusQualidade: z.enum(["validando", "conforme", "nao_conforme", "com_defeito"]).optional(),
+        liberadoPagamento: z.coerce.boolean().optional(),
+    }).optional(),
+});
+
 // Schema de resposta para Conferência
 export const conferenciaResponseSchema = z.object({
     id: z.string().uuid(),

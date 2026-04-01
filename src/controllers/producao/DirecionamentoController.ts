@@ -23,7 +23,12 @@ class CreateDirecionamentoController {
 class ListAllDirecionamentoController {
     async handle(req: Request, res: Response) {
         const { status, faccaoId, page, limit } = req.query;
-        const direcionamentos = await new ListAllDirecionamentoService().execute(status as string, faccaoId as string, page as string | number | undefined, limit as string | number | undefined);
+        const direcionamentos = await new ListAllDirecionamentoService().execute(
+            status as string | string[] | undefined,
+            faccaoId as string | string[] | undefined,
+            page as string | number | undefined,
+            limit as string | number | undefined
+        );
         return res.json(direcionamentos);
     }
 }
@@ -85,6 +90,20 @@ class ListarGradesSobraController {
     }
 }
 
+class ListRemessasProntasController {
+    async handle(req: Request, res: Response) {
+        const { page, limit } = req.query;
+        // Remessas prontas são aquelas com status entregue
+        const remessas = await new ListAllDirecionamentoService().execute(
+            "entregue",
+            undefined,
+            page as string | number | undefined,
+            limit as string | number | undefined
+        );
+        return res.json(remessas);
+    }
+}
+
 export {
     CreateDirecionamentoController,
     ListAllDirecionamentoController,
@@ -93,5 +112,6 @@ export {
     UpdateDirecionamentoStatusController,
     UpdateDirecionamentoSkuPriceController,
     DeleteDirecionamentoController,
-    ListarGradesSobraController
+    ListarGradesSobraController,
+    ListRemessasProntasController
 };

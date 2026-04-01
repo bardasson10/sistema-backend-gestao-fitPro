@@ -188,8 +188,8 @@ const direcionamentoListItemSchema = z.object({
     tipoServico: z.enum(["costura", "corte"]),
     quantidade: z.number().int(),
     valorTotalEstimado: z.number(),
-    dataSaida: z.string().datetime(),
-    dataPrevisaoRetorno: z.string().datetime(),
+    dataSaida: z.string().datetime().nullable(),
+    dataPrevisaoRetorno: z.string().datetime().nullable(),
     faccao: z.object({
         id: z.string().uuid(),
         nome: z.string(),
@@ -891,11 +891,46 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         method: 'get',
         path: '/direcionamentos',
         tags: [TAG_DIRECIONAMENTOS],
-        summary: 'Listar direcionamentos',
+        summary: 'Listar direcionamentos com filtros',
+        description: 'Lista direcionamentos (remessas) com suporte a filtros por status e facção. Suporta multiselect: ?status=separado&status=em_producao ou ?status=separado,em_producao',
         security: [{ bearerAuth: [] }],
+        request: {
+            query: z.object({
+                status: multiValueQuerySchema.describe('Filtrer por status: separado, em_producao, entregue'),
+                faccaoId: multiValueQuerySchema.describe('Filtrar por ID da facção'),
+                page: z.string().optional().describe('Número da página (padrão: 1)'),
+                limit: z.string().optional().describe('Itens por página (padrão: 10)')
+            }).partial()
+        },
         responses: {
             200: {
                 description: 'Lista de direcionamentos',
+                content: {
+                    'application/json': {
+                        schema: paginatedDirecionamentosSchema
+                    }
+                }
+            }
+        }
+    });
+
+    // GET /direcionamentos/prontas - Listar remessas prontas
+    registry.registerPath({
+        method: 'get',
+        path: '/direcionamentos/prontas',
+        tags: [TAG_DIRECIONAMENTOS],
+        summary: 'Listar remessas prontas (entregues)',
+        description: 'Lista direcionamentos (remessas) com status entregue (prontas para conferência de pagamento)',
+        security: [{ bearerAuth: [] }],
+        request: {
+            query: z.object({
+                page: z.string().optional().describe('Número da página (padrão: 1)'),
+                limit: z.string().optional().describe('Itens por página (padrão: 10)')
+            }).partial()
+        },
+        responses: {
+            200: {
+                description: 'Lista de remessas prontas',
                 content: {
                     'application/json': {
                         schema: paginatedDirecionamentosSchema
@@ -1128,6 +1163,14 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         path: '/conferencias',
         tags: [TAG_CONFERENCIAS],
         summary: 'Listar conferências',
+        request: {
+            query: z.object({
+                page: z.coerce.number().int().positive().optional().describe('Número da página (padrão: 1)'),
+                limit: z.coerce.number().int().positive().optional().describe('Itens por página (padrão: 10)'),
+                statusQualidade: z.enum(['validando', 'conforme', 'nao_conforme', 'com_defeito']).optional().describe('Filtro por status da qualidade'),
+                liberadoPagamento: z.coerce.boolean().optional().describe('Filtro por liberação de pagamento')
+            }).partial()
+        },
         security: [{ bearerAuth: [] }],
         responses: {
             200: {

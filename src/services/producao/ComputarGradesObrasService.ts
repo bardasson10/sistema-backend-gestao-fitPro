@@ -42,6 +42,14 @@ class ComputarGradesObrasService {
             throw new Error("Lote nao encontrado.");
         }
 
+        if (lote.status !== "cortado") {
+            return {
+                message: "Lote ainda nao cortado. Estoque de corte nao foi sincronizado.",
+                loteId: loteProducaoId,
+                itensCriados: 0
+            };
+        }
+
         const cores = await prismaClient.cor.findMany({
             select: {
                 id: true,
