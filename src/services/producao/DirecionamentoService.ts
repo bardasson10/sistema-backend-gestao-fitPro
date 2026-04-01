@@ -243,7 +243,8 @@ class ListAllDirecionamentoService {
                         select: {
                             id: true,
                             nome: true,
-                            responsavel: true
+                            responsavel: true,
+                            prazoMedioDias: true
                         }
                     },
                     items: {
@@ -298,6 +299,19 @@ class ListAllDirecionamentoService {
         ]);
 
         const data = direcionamentos.map((direcionamento) => ({
+            ...(() => {
+                const dataSaidaCalculada = direcionamento.dataSaida ?? direcionamento.createdAt;
+                const dataPrevisaoCalculada = direcionamento.dataPrevisaoRetorno ?? (() => {
+                    const previsao = new Date(dataSaidaCalculada);
+                    previsao.setDate(previsao.getDate() + (direcionamento.faccao.prazoMedioDias ?? 0));
+                    return previsao;
+                })();
+
+                return {
+                    dataSaida: dataSaidaCalculada.toISOString(),
+                    dataPrevisaoRetorno: dataPrevisaoCalculada.toISOString()
+                };
+            })(),
             valorTotalEstimado: direcionamento.items.reduce((sum, item) => {
                 const valorPorPeca = toNumber(item.valorFaccaoPorPeca) ?? 0;
                 return sum + (item.quantidade * valorPorPeca);
@@ -306,8 +320,6 @@ class ListAllDirecionamentoService {
             status: direcionamento.status,
             tipoServico: direcionamento.tipoServico,
             quantidade: direcionamento.quantidade,
-            dataSaida: direcionamento.dataSaida,
-            dataPrevisaoRetorno: direcionamento.dataPrevisaoRetorno,
             faccao: {
                 id: direcionamento.faccao.id,
                 nome: direcionamento.faccao.nome,
