@@ -76,7 +76,7 @@ const loteInclude = {
             }
         }
     }
-} as const;
+};
 
 type RoloReservado = {
     estoqueRoloId: string;
@@ -763,15 +763,96 @@ class CreateLoteProducaoService {
 }
 
 class ListAllLoteProducaoService {
-    async execute(status?: string, responsavelId?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+    async execute({
+        status,
+        responsavelId,
+        codigoLote,
+        page,
+        limit,
+        corId,
+        produtoId,
+        dataInicio,
+        dataFim
+    }: {
+        status?: string;
+        responsavelId?: string;
+        codigoLote?: string;
+        page?: number | string;
+        limit?: number | string;
+        corId?: string;
+        produtoId?: string;
+        dataInicio?: string;
+        dataFim?: string;
+    }): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+
+        const parseData = (valor?: string, campo?: string) => {
+            if (!valor) {
+                return undefined;
+            }
+
+            const data = new Date(valor);
+            if (Number.isNaN(data.getTime())) {
+                throw new Error(`Parâmetro '${campo}' inválido. Use data no formato ISO (ex: 2026-03-31).`);
+            }
+
+            return data;
+        };
+
+        const filtroDataInicio = parseData(dataInicio, "dataInicio");
+        const filtroDataFim = parseData(dataFim, "dataFim");
+        const dataFimAjustada = filtroDataFim
+            ? (/^\d{4}-\d{2}-\d{2}$/.test(dataFim as string)
+                ? new Date(`${dataFim}T23:59:59.999Z`)
+                : filtroDataFim)
+            : undefined;
+        if (filtroDataInicio && dataFimAjustada && filtroDataInicio > dataFimAjustada) {
+            throw new Error("Parâmetros de data inválidos: dataInicio não pode ser maior que dataFim.");
+        }
+
+        const where: any = {
+            ...(status && { status }),
+            ...(responsavelId && { responsavelId }),
+            ...(codigoLote && {
+                codigoLote: {
+                    contains: codigoLote,
+                    mode: "insensitive"
+                }
+            }),
+            ...((filtroDataInicio || dataFimAjustada) && {
+                createdAt: {
+                    ...(filtroDataInicio && { gte: filtroDataInicio }),
+                    ...(dataFimAjustada && { lte: dataFimAjustada })
+                }
+            })
+        };
+
+        const andFilters: any[] = [];
+        if (corId) {
+            andFilters.push({
+                tecido: {
+                    corId
+                }
+            });
+        }
+
+        if (produtoId) {
+            andFilters.push({
+                items: {
+                    some: {
+                        produtoId
+                    }
+                }
+            });
+        }
+
+        if (andFilters.length > 0) {
+            where.AND = andFilters;
+        }
 
         const [lotes, total] = await Promise.all([
             prismaClient.loteProducao.findMany({
-                where: {
-                    ...(status && { status }),
-                    ...(responsavelId && { responsavelId })
-                },
+                where,
                 include: loteInclude,
                 skip,
                 take: pageLimit,
@@ -780,10 +861,7 @@ class ListAllLoteProducaoService {
                 }
             }),
             prismaClient.loteProducao.count({
-                where: {
-                    ...(status && { status }),
-                    ...(responsavelId && { responsavelId })
-                }
+                where
             })
         ]);
 
@@ -1444,4 +1522,492 @@ class AddRolosLoteService {
     }
 }
 
-export { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, AddRolosLoteService, DeleteLoteProducaoService };
+class ResumoPorCorLoteService {
+    async execute({
+        status,
+        responsavelId,
+        codigoLote,
+        page,
+        limit,
+        corId,
+        produtoId,
+        dataInicio,
+        dataFim
+    }: {
+        status?: string;
+        responsavelId?: string;
+        codigoLote?: string;
+        page?: number | string;
+        limit?: number | string;
+        corId?: string;
+        produtoId?: string;
+        dataInicio?: string;
+        dataFim?: string;
+    }): Promise<any> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+
+        const parseData = (valor?: string, campo?: string) => {
+            if (!valor) {
+                return undefined;
+            }
+
+            const data = new Date(valor);
+            if (Number.isNaN(data.getTime())) {
+                throw new Error(`Parâmetro '${campo}' inválido. Use data no formato ISO (ex: 2026-03-31).`);
+            }
+
+            return data;
+        };
+
+        const filtroDataInicio = parseData(dataInicio, "dataInicio");
+        const filtroDataFim = parseData(dataFim, "dataFim");
+        const dataFimAjustada = filtroDataFim
+            ? (/^\d{4}-\d{2}-\d{2}$/.test(dataFim as string)
+                ? new Date(`${dataFim}T23:59:59.999Z`)
+                : filtroDataFim)
+            : undefined;
+
+        if (filtroDataInicio && dataFimAjustada && filtroDataInicio > dataFimAjustada) {
+            throw new Error("Parâmetros de data inválidos: dataInicio não pode ser maior que dataFim.");
+        }
+
+        const where: any = {
+            ...(status && { status }),
+            ...(responsavelId && { responsavelId }),
+            ...(codigoLote && {
+                codigoLote: {
+                    contains: codigoLote,
+                    mode: "insensitive"
+                }
+            }),
+            ...((filtroDataInicio || dataFimAjustada) && {
+                createdAt: {
+                    ...(filtroDataInicio && { gte: filtroDataInicio }),
+                    ...(dataFimAjustada && { lte: dataFimAjustada })
+                }
+            })
+        };
+
+        const andFilters: any[] = [];
+        if (corId) {
+            andFilters.push({
+                tecido: {
+                    corId
+                }
+            });
+        }
+
+        if (produtoId) {
+            andFilters.push({
+                items: {
+                    some: {
+                        produtoId
+                    }
+                }
+            });
+        }
+
+        if (andFilters.length > 0) {
+            where.AND = andFilters;
+        }
+
+        const resumoPorCorInclude = {
+            items: {
+                include: {
+                    produto: true,
+                    tamanho: true,
+                    enfestos: {
+                        include: {
+                            rolos: {
+                                include: {
+                                    rolo: {
+                                        include: {
+                                            tecido: {
+                                                include: {
+                                                    cor: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            tecido: {
+                include: {
+                    cor: true
+                }
+            }
+        };
+        
+        const [lotes, total] = await Promise.all([
+            prismaClient.loteProducao.findMany({
+                where,
+                include: resumoPorCorInclude,
+                skip,
+                take: pageLimit,
+                orderBy: {
+                    createdAt: "desc"
+                }
+            }),
+            prismaClient.loteProducao.count({
+                where
+            })
+        ]);
+
+        // Mapa para agrupar produtos por ID
+        const produtosMapGeral = new Map<string, any>();
+        // Mapa para agrupar tamanhos por ID
+        const tamanhosMapGeral = new Map<string, any>();
+        // Mapa para agrupar cores
+        const coresMap = new Map<string, any>();
+
+        // Processar lotes
+        let itemsProcessados = 0;
+        let enfestosProcessados = 0;
+
+        for (const lote of lotes) {
+            for (const item of lote.items ?? []) {
+                const produto = item.produto;
+                if (!produto) continue;
+                
+                itemsProcessados++;
+
+                // Adicionar produto ao mapa geral
+                if (!produtosMapGeral.has(produto.id)) {
+                    produtosMapGeral.set(produto.id, {
+                        id: produto.id,
+                        nome: produto.nome,
+                        sku: produto.sku,
+                        linhas: new Map<string, any>(),
+                        total: 0
+                    });
+                }
+
+                // Adicionar tamanho ao mapa geral
+                if (!tamanhosMapGeral.has(item.tamanhoId)) {
+                    tamanhosMapGeral.set(item.tamanhoId, {
+                        id: item.tamanhoId,
+                        nome: item.tamanho?.nome ?? "Sem tamanho",
+                        ordem: item.tamanho?.ordem ?? 999,
+                        total: 0
+                    });
+                }
+
+                // Processar enfestos por cor
+                if (item.enfestos?.length > 0) {
+                    let enfestoComCorEncontrado = false;
+                    
+                    for (const enfesto of item.enfestos) {
+                        const corKey = enfesto.cor;
+                        const corDoRolo = enfesto.rolos?.[0]?.rolo?.tecido?.cor;
+
+                        if (!corKey && !corDoRolo) {
+                            continue;
+                        }
+                        
+                        enfestoComCorEncontrado = true;
+                        enfestosProcessados++;
+                        const corId = corDoRolo?.id ?? `cor-string-${corKey}`;
+                        const corNome = corKey && typeof corKey === "string" && corKey.length < 50 ? corKey : corDoRolo?.nome;
+                        const corHex = corDoRolo?.codigoHex ?? "#000000";
+
+                        // Inicializar cor no mapa
+                        if (!coresMap.has(corId)) {
+                            coresMap.set(corId, {
+                                id: corId,
+                                nome: corNome,
+                                codigoHex: corHex,
+                                qtdFolhas: 0,
+                                produtos: new Map<string, any>(),
+                                tamanhos: new Map<string, any>(),
+                                total: 0
+                            });
+                        }
+
+                        const corData = coresMap.get(corId)!;
+                        corData.qtdFolhas += Number(enfesto.qtdFolhas) || 0;
+
+                        // Adicionar produto à cor
+                        if (!corData.produtos.has(produto.id)) {
+                            corData.produtos.set(produto.id, {
+                                id: produto.id,
+                                nome: produto.nome,
+                                sku: produto.sku,
+                                linhas: new Map<string, any>(),
+                                total: 0
+                            });
+                        }
+
+                        // Adicionar tamanho à cor
+                        if (!corData.tamanhos.has(item.tamanhoId)) {
+                            corData.tamanhos.set(item.tamanhoId, {
+                                id: item.tamanhoId,
+                                nome: item.tamanho?.nome ?? "Sem tamanho",
+                                ordem: item.tamanho?.ordem ?? 999,
+                                total: 0
+                            });
+                        }
+
+                        // Quantidade final da grade por cor = quantidade base * qtdFolhas do enfesto
+                        const quantidade = Number(item.quantidadePlanejada) * (Number(enfesto.qtdFolhas) || 1);
+
+                        // Atualizar linha do produto no geral
+                        const linhaGeralProd = produtosMapGeral.get(produto.id)!.linhas;
+                        if (!linhaGeralProd.has(item.tamanhoId)) {
+                            linhaGeralProd.set(item.tamanhoId, {
+                                tamanhoId: item.tamanhoId,
+                                tamanhoNome: item.tamanho?.nome ?? "Sem tamanho",
+                                tamanhoOrdem: item.tamanho?.ordem ?? 999,
+                                quantidade: 0
+                            });
+                        }
+                        linhaGeralProd.get(item.tamanhoId)!.quantidade += quantidade;
+
+                        // Atualizar tamanho geral
+                        tamanhosMapGeral.get(item.tamanhoId)!.total += quantidade;
+
+                        // Atualizar total do produto no geral
+                        produtosMapGeral.get(produto.id)!.total += quantidade;
+
+                        // Atualizar linha do produto na cor
+                        const linhaProdCor = corData.produtos.get(produto.id)!.linhas;
+                        if (!linhaProdCor.has(item.tamanhoId)) {
+                            linhaProdCor.set(item.tamanhoId, {
+                                tamanhoId: item.tamanhoId,
+                                tamanhoNome: item.tamanho?.nome ?? "Sem tamanho",
+                                tamanhoOrdem: item.tamanho?.ordem ?? 999,
+                                quantidade: 0
+                            });
+                        }
+                        linhaProdCor.get(item.tamanhoId)!.quantidade += quantidade;
+                        corData.produtos.get(produto.id)!.total += quantidade;
+
+                        // Atualizar tamanho na cor
+                        corData.tamanhos.get(item.tamanhoId)!.total += quantidade;
+
+                        // Atualizar total da cor
+                        corData.total += quantidade;
+                    }
+                    
+                    // Se nenhum enfesto teve cor válida, usar fallback
+                    if (!enfestoComCorEncontrado) {
+                        const corDoRolo = lote.tecido?.cor;
+                        if (corDoRolo) {
+                            const corId = corDoRolo.id;
+                            const corNome = corDoRolo.nome;
+                            const corHex = corDoRolo.codigoHex ?? "#000000";
+
+                            enfestosProcessados++;
+
+                            // Inicializar cor no mapa
+                            if (!coresMap.has(corId)) {
+                                coresMap.set(corId, {
+                                    id: corId,
+                                    nome: corNome,
+                                    codigoHex: corHex,
+                                    qtdFolhas: 0,
+                                    produtos: new Map<string, any>(),
+                                    tamanhos: new Map<string, any>(),
+                                    total: 0
+                                });
+                            }
+
+                            const corData = coresMap.get(corId)!;
+                            const qtdFolhasFallback = item.enfestos.reduce((acc: number, enfestoAtual: any) => acc + (Number(enfestoAtual.qtdFolhas) || 0), 0);
+                            corData.qtdFolhas += qtdFolhasFallback;
+
+                            // Adicionar produto à cor
+                            if (!corData.produtos.has(produto.id)) {
+                                corData.produtos.set(produto.id, {
+                                    id: produto.id,
+                                    nome: produto.nome,
+                                    sku: produto.sku,
+                                    linhas: new Map<string, any>(),
+                                    total: 0
+                                });
+                            }
+
+                            // Adicionar tamanho à cor
+                            if (!corData.tamanhos.has(item.tamanhoId)) {
+                                corData.tamanhos.set(item.tamanhoId, {
+                                    id: item.tamanhoId,
+                                    nome: item.tamanho?.nome ?? "Sem tamanho",
+                                    ordem: item.tamanho?.ordem ?? 999,
+                                    total: 0
+                                });
+                            }
+
+                            // Se há enfestos sem cor válida, usa a soma das folhas para manter consistência
+                            const quantidade = Number(item.quantidadePlanejada) * Math.max(qtdFolhasFallback, 1);
+
+                            // Atualizar linha do produto no geral
+                            const linhaGeralProd = produtosMapGeral.get(produto.id)!.linhas;
+                            if (!linhaGeralProd.has(item.tamanhoId)) {
+                                linhaGeralProd.set(item.tamanhoId, {
+                                    tamanhoId: item.tamanhoId,
+                                    tamanhoNome: item.tamanho?.nome ?? "Sem tamanho",
+                                    tamanhoOrdem: item.tamanho?.ordem ?? 999,
+                                    quantidade: 0
+                                });
+                            }
+                            linhaGeralProd.get(item.tamanhoId)!.quantidade += quantidade;
+
+                            // Atualizar tamanho geral
+                            tamanhosMapGeral.get(item.tamanhoId)!.total += quantidade;
+
+                            // Atualizar total do produto no geral
+                            produtosMapGeral.get(produto.id)!.total += quantidade;
+
+                            // Atualizar linha do produto na cor
+                            const linhaProdCor = corData.produtos.get(produto.id)!.linhas;
+                            if (!linhaProdCor.has(item.tamanhoId)) {
+                                linhaProdCor.set(item.tamanhoId, {
+                                    tamanhoId: item.tamanhoId,
+                                    tamanhoNome: item.tamanho?.nome ?? "Sem tamanho",
+                                    tamanhoOrdem: item.tamanho?.ordem ?? 999,
+                                    quantidade: 0
+                                });
+                            }
+                            linhaProdCor.get(item.tamanhoId)!.quantidade += quantidade;
+                            corData.produtos.get(produto.id)!.total += quantidade;
+
+                            // Atualizar tamanho na cor
+                            corData.tamanhos.get(item.tamanhoId)!.total += quantidade;
+
+                            // Atualizar total da cor
+                            corData.total += quantidade;
+                        }
+                    }
+                } else {
+                    // Fallback: processar item sem enfestos usando cor do tecido do lote
+                    const corDoRolo = lote.tecido?.cor;
+                    
+                    if (!corDoRolo) {
+                        continue;
+                    }
+
+                    const corId = corDoRolo.id;
+                    const corNome = corDoRolo.nome;
+                    const corHex = corDoRolo.codigoHex ?? "#000000";
+
+                    enfestosProcessados++;
+
+                    // Inicializar cor no mapa
+                    if (!coresMap.has(corId)) {
+                        coresMap.set(corId, {
+                            id: corId,
+                            nome: corNome,
+                            codigoHex: corHex,
+                            qtdFolhas: 0,
+                            produtos: new Map<string, any>(),
+                            tamanhos: new Map<string, any>(),
+                            total: 0
+                        });
+                    }
+
+                    const corData = coresMap.get(corId)!;
+
+                    // Adicionar produto à cor
+                    if (!corData.produtos.has(produto.id)) {
+                        corData.produtos.set(produto.id, {
+                            id: produto.id,
+                            nome: produto.nome,
+                            sku: produto.sku,
+                            linhas: new Map<string, any>(),
+                            total: 0
+                        });
+                    }
+
+                    // Adicionar tamanho à cor
+                    if (!corData.tamanhos.has(item.tamanhoId)) {
+                        corData.tamanhos.set(item.tamanhoId, {
+                            id: item.tamanhoId,
+                            nome: item.tamanho?.nome ?? "Sem tamanho",
+                            ordem: item.tamanho?.ordem ?? 999,
+                            total: 0
+                        });
+                    }
+
+                    // Quantidade sem divisão (não há enfestos/folhas)
+                    const quantidade = Number(item.quantidadePlanejada);
+
+                    // Atualizar linha do produto no geral
+                    const linhaGeralProd = produtosMapGeral.get(produto.id)!.linhas;
+                    if (!linhaGeralProd.has(item.tamanhoId)) {
+                        linhaGeralProd.set(item.tamanhoId, {
+                            tamanhoId: item.tamanhoId,
+                            tamanhoNome: item.tamanho?.nome ?? "Sem tamanho",
+                            tamanhoOrdem: item.tamanho?.ordem ?? 999,
+                            quantidade: 0
+                        });
+                    }
+                    linhaGeralProd.get(item.tamanhoId)!.quantidade += quantidade;
+
+                    // Atualizar tamanho geral
+                    tamanhosMapGeral.get(item.tamanhoId)!.total += quantidade;
+
+                    // Atualizar total do produto no geral
+                    produtosMapGeral.get(produto.id)!.total += quantidade;
+
+                    // Atualizar linha do produto na cor
+                    const linhaProdCor = corData.produtos.get(produto.id)!.linhas;
+                    if (!linhaProdCor.has(item.tamanhoId)) {
+                        linhaProdCor.set(item.tamanhoId, {
+                            tamanhoId: item.tamanhoId,
+                            tamanhoNome: item.tamanho?.nome ?? "Sem tamanho",
+                            tamanhoOrdem: item.tamanho?.ordem ?? 999,
+                            quantidade: 0
+                        });
+                    }
+                    linhaProdCor.get(item.tamanhoId)!.quantidade += quantidade;
+                    corData.produtos.get(produto.id)!.total += quantidade;
+
+                    // Atualizar tamanho na cor
+                    corData.tamanhos.get(item.tamanhoId)!.total += quantidade;
+
+                    // Atualizar total da cor
+                    corData.total += quantidade;
+                }
+            }
+        }
+
+        // Converter mapas para arrays
+        const produtosArray = Array.from(produtosMapGeral.values()).map(prod => ({
+            ...prod,
+            linhas: Array.from(prod.linhas.values()).sort((a: any, b: any) => a.tamanhoOrdem - b.tamanhoOrdem)
+        }));
+
+        const tamanhosArray = Array.from(tamanhosMapGeral.values()).sort((a: any, b: any) => a.ordem - b.ordem);
+
+        const coresArray = Array.from(coresMap.values()).map(cor => ({
+            ...cor,
+            produtos: Array.from(cor.produtos.values()).map((prod: any) => ({
+                ...prod,
+                linhas: Array.from(prod.linhas.values()).sort((a: any, b: any) => a.tamanhoOrdem - b.tamanhoOrdem)
+            })),
+            tamanhos: Array.from(cor.tamanhos.values()).sort((a: any, b: any) => a.ordem - b.ordem)
+        }));
+
+        const grandTotal = Array.from(produtosMapGeral.values()).reduce((sum, prod) => sum + prod.total, 0);
+
+        return {
+            totalGeral: {
+                produtos: produtosArray,
+                tamanhos: tamanhosArray,
+                grandTotal
+            },
+            cores: coresArray,
+            paginacao: {
+                paginaAtual: pageNumber,
+                itensPorPagina: pageLimit,
+                totalItens: total,
+                totalPaginas: Math.ceil(total / pageLimit)
+            }
+        };
+    }
+}
+
+export { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, AddRolosLoteService, DeleteLoteProducaoService, ResumoPorCorLoteService };

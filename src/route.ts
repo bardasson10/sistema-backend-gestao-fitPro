@@ -34,7 +34,7 @@ import { createEstoqueRoloSchema, updateEstoqueRoloSchema, createMovimentacaoEst
 
 // Produção Controllers
 import { CreateFaccaoController, ListAllFaccaoController, ListByIdFaccaoController, UpdateFaccaoController, DeleteFaccaoController } from "./controllers/producao/FaccaoController";
-import { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, DeleteLoteProducaoController } from "./controllers/producao/LoteProducaoController";
+import { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, DeleteLoteProducaoController, ResumoPorCorLoteController } from "./controllers/producao/LoteProducaoController";
 import {
 	CreateDirecionamentoController,
 	ListAllDirecionamentoController,
@@ -149,6 +149,7 @@ router.delete("/faccoes/:id", isAuthenticated, isAdmin, new DeleteFaccaoControll
 
 // ==================== LOTES DE PRODUÇÃO ====================
 router.post("/lotes-producao", isAuthenticated, validateSchema(createLoteProducaoSchema), new CreateLoteProducaoController().handle);
+router.get("/lotes-producao/resumo-por-cor", isAuthenticated, new ResumoPorCorLoteController().handle);
 router.get("/lotes-producao", isAuthenticated, new ListAllLoteProducaoController().handle);
 router.get("/lotes-producao/:id", isAuthenticated, new ListByIdLoteProducaoController().handle);
 router.put("/lotes-producao/:id", isAuthenticated, validateSchema(updateLoteProducaoSchema), new UpdateLoteProducaoController().handle);

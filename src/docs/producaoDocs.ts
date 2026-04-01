@@ -316,6 +316,51 @@ const relatorioProdutividadeSchema = z.object({
     }))
 });
 
+const linhaGradeSchema = z.object({
+    tamanhoId: z.string().uuid(),
+    tamanhoNome: z.string(),
+    tamanhoOrdem: z.number().int(),
+    quantidade: z.number().int()
+});
+
+const produtoOrdenado = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    sku: z.string(),
+    linhas: z.array(linhaGradeSchema),
+    total: z.number().int()
+});
+
+const tamanhoOrdenado = z.object({
+    id: z.string().uuid(),
+    nome: z.string(),
+    ordem: z.number().int(),
+    total: z.number().int()
+});
+
+const resumoPorCorSchema = z.object({
+    totalGeral: z.object({
+        produtos: z.array(produtoOrdenado),
+        tamanhos: z.array(tamanhoOrdenado),
+        grandTotal: z.number().int()
+    }),
+    cores: z.array(z.object({
+        id: z.string().uuid(),
+        nome: z.string(),
+        codigoHex: z.string(),
+        qtdFolhas: z.number().int(),
+        produtos: z.array(produtoOrdenado),
+        tamanhos: z.array(tamanhoOrdenado),
+        total: z.number().int()
+    })),
+    paginacao: z.object({
+        paginaAtual: z.number().int(),
+        itensPorPagina: z.number().int(),
+        totalItens: z.number().int(),
+        totalPaginas: z.number().int()
+    })
+});
+
 export function registerProducaoRoutes(registry: OpenAPIRegistry) {
     // POST /faccoes - Criar facção
     registry.registerPath({
@@ -518,12 +563,57 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         tags: [TAG_LOTES],
         summary: 'Listar lotes de produção',
         security: [{ bearerAuth: [] }],
+        request: {
+            query: z.object({
+                status: z.enum(["lote_criado", "enfesto", "cortado"]).optional(),
+                responsavelId: z.string().uuid().optional(),
+                codigoLote: z.string().min(1).optional(),
+                page: z.coerce.number().int().positive().optional(),
+                limit: z.coerce.number().int().positive().optional(),
+                corId: z.string().uuid().optional(),
+                produtoId: z.string().uuid().optional(),
+                dataInicio: z.string().optional(),
+                dataFim: z.string().optional()
+            })
+        },
         responses: {
             200: {
                 description: 'Lista de lotes de produção',
                 content: {
                     'application/json': {
                         schema: paginatedLotesSchema
+                    }
+                }
+            }
+        }
+    });
+
+    // GET /lotes-producao/resumo-por-cor - Resumo de lotes por cor
+    registry.registerPath({
+        method: 'get',
+        path: '/lotes-producao/resumo-por-cor',
+        tags: [TAG_LOTES],
+        summary: 'Resumo de lotes agrupados por cor',
+        security: [{ bearerAuth: [] }],
+        request: {
+            query: z.object({
+                status: z.enum(["lote_criado", "enfesto", "cortado"]).optional(),
+                responsavelId: z.string().uuid().optional(),
+                codigoLote: z.string().min(1).optional(),
+                page: z.coerce.number().int().positive().optional(),
+                limit: z.coerce.number().int().positive().optional(),
+                corId: z.string().uuid().optional(),
+                produtoId: z.string().uuid().optional(),
+                dataInicio: z.string().optional(),
+                dataFim: z.string().optional()
+            })
+        },
+        responses: {
+            200: {
+                description: 'Resumo de lotes agrupados por cor',
+                content: {
+                    'application/json': {
+                        schema: resumoPorCorSchema
                     }
                 }
             }

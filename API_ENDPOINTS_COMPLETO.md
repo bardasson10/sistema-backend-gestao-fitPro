@@ -695,7 +695,7 @@ Content-Type: application/json
 
 ### GET /lotes-producao - Listar Lotes
 ```http
-GET /lotes-producao?status=em_producao&responsavelId=uuid
+GET /lotes-producao?status=enfesto&responsavel=uuid&cor=azul&produto=camiseta&dataInicio=2026-03-01&dataFim=2026-03-31&page=1&limit=20
 Authorization: Bearer <token>
 ```
 

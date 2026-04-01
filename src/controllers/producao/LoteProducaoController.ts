@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, AddRolosLoteService, DeleteLoteProducaoService } from "../../services/producao/LoteProducaoService";
+import { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, AddRolosLoteService, DeleteLoteProducaoService, ResumoPorCorLoteService } from "../../services/producao/LoteProducaoService";
 
 class CreateLoteProducaoController {
     async handle(req: Request, res: Response) {
@@ -16,8 +16,29 @@ class CreateLoteProducaoController {
 
 class ListAllLoteProducaoController {
     async handle(req: Request, res: Response) {
-        const { status, responsavelId, page, limit } = req.query;
-        const lotes = await new ListAllLoteProducaoService().execute(status as string, responsavelId as string, page as string | number | undefined, limit as string);
+        const {
+            status,
+            responsavelId,
+            codigoLote,
+            page,
+            limit,
+            corId,
+            produtoId,
+            dataInicio,
+            dataFim
+        } = req.query;
+
+        const lotes = await new ListAllLoteProducaoService().execute({
+            status: status as string,
+            responsavelId: responsavelId as string,
+            codigoLote: codigoLote as string,
+            page: page as string | number | undefined,
+            limit: limit as string | number | undefined,
+            corId: corId as string,
+            produtoId: produtoId as string,
+            dataInicio: dataInicio as string,
+            dataFim: dataFim as string
+        });
         return res.json(lotes);
     }
 }
@@ -77,4 +98,33 @@ class DeleteLoteProducaoController {
     }
 }
 
-export { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, DeleteLoteProducaoController };
+class ResumoPorCorLoteController {
+    async handle(req: Request, res: Response) {
+        const {
+            status,
+            responsavelId,
+            codigoLote,
+            page,
+            limit,
+            corId,
+            produtoId,
+            dataInicio,
+            dataFim
+        } = req.query;
+
+        const resumo = await new ResumoPorCorLoteService().execute({
+            status: status as string,
+            responsavelId: responsavelId as string,
+            codigoLote: codigoLote as string,
+            page: page as string | number | undefined,
+            limit: limit as string | number | undefined,
+            corId: corId as string,
+            produtoId: produtoId as string,
+            dataInicio: dataInicio as string,
+            dataFim: dataFim as string
+        });
+        return res.json(resumo);
+    }
+}
+
+export { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, DeleteLoteProducaoController, ResumoPorCorLoteController };

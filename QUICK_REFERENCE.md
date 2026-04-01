@@ -231,7 +231,19 @@ Exemplo: Não pode ir de "recebido" para outro estado
 
 ```bash
 # Filtrar por status
-GET /lotes-producao?status=em_producao
+GET /lotes-producao?status=enfesto
+
+# Filtrar por responsável
+GET /lotes-producao?responsavel=uuid-do-responsavel
+
+# Filtrar por cor e produto
+GET /lotes-producao?cor=azul&produto=camiseta
+
+# Filtrar por período de criação do lote
+GET /lotes-producao?dataInicio=2026-03-01&dataFim=2026-03-31
+
+# Paginação
+GET /lotes-producao?page=1&limit=20
 
 # Filtrar por tipo
 GET /estoque-rolos?situacao=disponivel&tecidoId=uuid
