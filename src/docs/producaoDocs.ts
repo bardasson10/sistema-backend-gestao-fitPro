@@ -338,6 +338,8 @@ const tamanhoOrdenado = z.object({
     total: z.number().int()
 });
 
+const multiValueQuerySchema = z.union([z.string(), z.array(z.string())]).optional();
+
 const resumoPorCorSchema = z.object({
     totalGeral: z.object({
         produtos: z.array(produtoOrdenado),
@@ -565,15 +567,15 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         security: [{ bearerAuth: [] }],
         request: {
             query: z.object({
-                status: z.enum(["lote_criado", "enfesto", "cortado"]).optional(),
-                responsavelId: z.string().uuid().optional(),
-                codigoLote: z.string().min(1).optional(),
+                status: z.union([z.enum(["lote_criado", "enfesto", "cortado"]), z.array(z.enum(["lote_criado", "enfesto", "cortado"]))]).optional(),
+                responsavelId: multiValueQuerySchema,
+                codigoLote: multiValueQuerySchema,
                 page: z.coerce.number().int().positive().optional(),
                 limit: z.coerce.number().int().positive().optional(),
-                corId: z.string().uuid().optional(),
-                produtoId: z.string().uuid().optional(),
-                dataInicio: z.string().optional(),
-                dataFim: z.string().optional()
+                corId: multiValueQuerySchema,
+                produtoId: multiValueQuerySchema,
+                dataInicio: multiValueQuerySchema,
+                dataFim: multiValueQuerySchema
             })
         },
         responses: {

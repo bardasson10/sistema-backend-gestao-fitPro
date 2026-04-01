@@ -113,15 +113,15 @@ class ResumoPorCorLoteController {
         } = req.query;
 
         const resumo = await new ResumoPorCorLoteService().execute({
-            status: status as string,
-            responsavelId: responsavelId as string,
-            codigoLote: codigoLote as string,
+            status: status as string | string[] | undefined,
+            responsavelId: responsavelId as string | string[] | undefined,
+            codigoLote: codigoLote as string | string[] | undefined,
             page: page as string | number | undefined,
             limit: limit as string | number | undefined,
-            corId: corId as string,
-            produtoId: produtoId as string,
-            dataInicio: dataInicio as string,
-            dataFim: dataFim as string
+            corId: corId as string | string[] | undefined,
+            produtoId: produtoId as string | string[] | undefined,
+            dataInicio: dataInicio as string | string[] | undefined,
+            dataFim: dataFim as string | string[] | undefined
         });
         return res.json(resumo);
     }

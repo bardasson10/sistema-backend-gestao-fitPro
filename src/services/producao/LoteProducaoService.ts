@@ -88,6 +88,30 @@ type RoloInicial = {
     pesoReservado: number;
 };
 
+type QueryFilterValue = string | string[] | undefined;
+
+function normalizarQueryParaArray(valor?: QueryFilterValue) {
+    if (!valor) {
+        return [] as string[];
+    }
+
+    const valores = Array.isArray(valor) ? valor : [valor];
+    return valores
+        .flatMap(item => String(item).split(","))
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+function primeiroValor(valor?: QueryFilterValue) {
+    const valores = normalizarQueryParaArray(valor);
+    return valores[0];
+}
+
+function ultimoValor(valor?: QueryFilterValue) {
+    const valores = normalizarQueryParaArray(valor);
+    return valores[valores.length - 1];
+}
+
 function extrairRolosReservados(items: ILoteItemComEnfestosInput[]) {
     const itensSemEnfesto = items.filter(item => !item.enfestos || item.enfestos.length === 0);
     if (itensSemEnfesto.length > 0) {
@@ -1534,17 +1558,17 @@ class ResumoPorCorLoteService {
         dataInicio,
         dataFim
     }: {
-        status?: string;
-        responsavelId?: string;
-        codigoLote?: string;
+        status?: QueryFilterValue;
+        responsavelId?: QueryFilterValue;
+        codigoLote?: QueryFilterValue;
         page?: number | string;
         limit?: number | string;
-        corId?: string;
-        produtoId?: string;
-        dataInicio?: string;
-        dataFim?: string;
+        corId?: QueryFilterValue;
+        produtoId?: QueryFilterValue;
+        dataInicio?: QueryFilterValue;
+        dataFim?: QueryFilterValue;
     }): Promise<any> {
-        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+        const { page: requestedPage, limit: pageLimit } = parsePaginationParams(page, limit);
 
         const parseData = (valor?: string, campo?: string) => {
             if (!valor) {
@@ -1559,11 +1583,11 @@ class ResumoPorCorLoteService {
             return data;
         };
 
-        const filtroDataInicio = parseData(dataInicio, "dataInicio");
-        const filtroDataFim = parseData(dataFim, "dataFim");
+        const filtroDataInicio = parseData(primeiroValor(dataInicio), "dataInicio");
+        const filtroDataFim = parseData(ultimoValor(dataFim), "dataFim");
         const dataFimAjustada = filtroDataFim
-            ? (/^\d{4}-\d{2}-\d{2}$/.test(dataFim as string)
-                ? new Date(`${dataFim}T23:59:59.999Z`)
+            ? (/^\d{4}-\d{2}-\d{2}$/.test(String(ultimoValor(dataFim)))
+                ? new Date(`${ultimoValor(dataFim)}T23:59:59.999Z`)
                 : filtroDataFim)
             : undefined;
 
@@ -1571,14 +1595,26 @@ class ResumoPorCorLoteService {
             throw new Error("Parâmetros de data inválidos: dataInicio não pode ser maior que dataFim.");
         }
 
+        const statusSelecionados = normalizarQueryParaArray(status);
+        const responsaveisSelecionados = normalizarQueryParaArray(responsavelId);
+        const codigosSelecionados = normalizarQueryParaArray(codigoLote);
+        const coresSelecionadas = normalizarQueryParaArray(corId);
+        const produtosSelecionados = normalizarQueryParaArray(produtoId);
+
         const where: any = {
-            ...(status && { status }),
-            ...(responsavelId && { responsavelId }),
-            ...(codigoLote && {
-                codigoLote: {
-                    contains: codigoLote,
-                    mode: "insensitive"
-                }
+            ...(statusSelecionados.length === 1 && { status: statusSelecionados[0] }),
+            ...(statusSelecionados.length > 1 && { status: { in: statusSelecionados } }),
+            ...(responsaveisSelecionados.length === 1 && { responsavelId: responsaveisSelecionados[0] }),
+            ...(responsaveisSelecionados.length > 1 && { responsavelId: { in: responsaveisSelecionados } }),
+            ...(codigosSelecionados.length > 0 && {
+                OR: [
+                    ...codigosSelecionados.map((codigo) => ({
+                        codigoLote: {
+                            contains: codigo,
+                            mode: "insensitive"
+                        }
+                    }))
+                ]
             }),
             ...((filtroDataInicio || dataFimAjustada) && {
                 createdAt: {
@@ -1589,19 +1625,11 @@ class ResumoPorCorLoteService {
         };
 
         const andFilters: any[] = [];
-        if (corId) {
-            andFilters.push({
-                tecido: {
-                    corId
-                }
-            });
-        }
-
-        if (produtoId) {
+        if (produtosSelecionados.length > 0) {
             andFilters.push({
                 items: {
                     some: {
-                        produtoId
+                        produtoId: produtosSelecionados.length === 1 ? produtosSelecionados[0] : { in: produtosSelecionados }
                     }
                 }
             });
@@ -1641,21 +1669,44 @@ class ResumoPorCorLoteService {
                 }
             }
         };
-        
-        const [lotes, total] = await Promise.all([
-            prismaClient.loteProducao.findMany({
-                where,
-                include: resumoPorCorInclude,
-                skip,
-                take: pageLimit,
-                orderBy: {
-                    createdAt: "desc"
-                }
-            }),
-            prismaClient.loteProducao.count({
-                where
+
+        const coresFiltro = coresSelecionadas.length > 0
+            ? await prismaClient.cor.findMany({
+                where: { id: { in: coresSelecionadas } },
+                select: { id: true, nome: true }
             })
-        ]);
+            : null;
+
+        if (coresSelecionadas.length > 0 && (!coresFiltro || coresFiltro.length !== coresSelecionadas.length)) {
+            throw new Error("Uma ou mais cores informadas no filtro não foram encontradas.");
+        }
+
+        const corIdsFiltro = new Set<string>(coresFiltro?.map(cor => cor.id) ?? []);
+        const nomesCorFiltro = new Set<string>(coresFiltro?.map(cor => String(cor.nome).trim().toLowerCase()) ?? []);
+
+        const corPassaNoFiltro = (corDoRolo?: any, corNomeEnfesto?: string) => {
+            if (coresSelecionadas.length === 0) {
+                return true;
+            }
+
+            if (corDoRolo?.id && corIdsFiltro.has(corDoRolo.id)) {
+                return true;
+            }
+
+            if (!corNomeEnfesto) {
+                return false;
+            }
+
+            return nomesCorFiltro.has(String(corNomeEnfesto).trim().toLowerCase());
+        };
+        
+        const lotes = await prismaClient.loteProducao.findMany({
+            where,
+            include: resumoPorCorInclude,
+            orderBy: {
+                createdAt: "desc"
+            }
+        });
 
         // Mapa para agrupar produtos por ID
         const produtosMapGeral = new Map<string, any>();
@@ -1663,6 +1714,27 @@ class ResumoPorCorLoteService {
         const tamanhosMapGeral = new Map<string, any>();
         // Mapa para agrupar cores
         const coresMap = new Map<string, any>();
+        // Controla enfestos ja contabilizados por cor para nao inflar qtdFolhas
+        const enfestosContabilizadosPorCor = new Map<string, Set<string>>();
+
+        const contabilizarQtdFolhasCor = (corId: string, qtdFolhas: number, rolosIds: string[]) => {
+            if (!Number.isFinite(qtdFolhas) || qtdFolhas <= 0) {
+                return 0;
+            }
+
+            if (!enfestosContabilizadosPorCor.has(corId)) {
+                enfestosContabilizadosPorCor.set(corId, new Set<string>());
+            }
+
+            const enfestosDaCor = enfestosContabilizadosPorCor.get(corId)!;
+            const chaveEnfesto = `${qtdFolhas}|${rolosIds.join(",")}`;
+            if (enfestosDaCor.has(chaveEnfesto)) {
+                return 0;
+            }
+
+            enfestosDaCor.add(chaveEnfesto);
+            return qtdFolhas;
+        };
 
         // Processar lotes
         let itemsProcessados = 0;
@@ -1672,6 +1744,10 @@ class ResumoPorCorLoteService {
             for (const item of lote.items ?? []) {
                 const produto = item.produto;
                 if (!produto) continue;
+
+                if (produtoId && item.produtoId !== produtoId) {
+                    continue;
+                }
                 
                 itemsProcessados++;
 
@@ -1707,6 +1783,10 @@ class ResumoPorCorLoteService {
                         if (!corKey && !corDoRolo) {
                             continue;
                         }
+
+                        if (!corPassaNoFiltro(corDoRolo, corKey)) {
+                            continue;
+                        }
                         
                         enfestoComCorEncontrado = true;
                         enfestosProcessados++;
@@ -1728,7 +1808,11 @@ class ResumoPorCorLoteService {
                         }
 
                         const corData = coresMap.get(corId)!;
-                        corData.qtdFolhas += Number(enfesto.qtdFolhas) || 0;
+                        const rolosIdsEnfesto = (enfesto.rolos ?? [])
+                            .map((enfestoRolo: any) => enfestoRolo.estoqueRoloId ?? enfestoRolo.rolo?.id)
+                            .filter(Boolean)
+                            .sort();
+                        corData.qtdFolhas += contabilizarQtdFolhasCor(corId, Number(enfesto.qtdFolhas) || 0, rolosIdsEnfesto);
 
                         // Adicionar produto à cor
                         if (!corData.produtos.has(produto.id)) {
@@ -1751,8 +1835,8 @@ class ResumoPorCorLoteService {
                             });
                         }
 
-                        // Quantidade final da grade por cor = quantidade base * qtdFolhas do enfesto
-                        const quantidade = Number(item.quantidadePlanejada) * (Number(enfesto.qtdFolhas) || 1);
+                        // quantidadePlanejada ja representa a quantidade final planejada do item
+                        const quantidade = Number(item.quantidadePlanejada);
 
                         // Atualizar linha do produto no geral
                         const linhaGeralProd = produtosMapGeral.get(produto.id)!.linhas;
@@ -1795,6 +1879,10 @@ class ResumoPorCorLoteService {
                     // Se nenhum enfesto teve cor válida, usar fallback
                     if (!enfestoComCorEncontrado) {
                         const corDoRolo = lote.tecido?.cor;
+                        if (!corPassaNoFiltro(corDoRolo, corDoRolo?.nome)) {
+                            continue;
+                        }
+
                         if (corDoRolo) {
                             const corId = corDoRolo.id;
                             const corNome = corDoRolo.nome;
@@ -1816,8 +1904,18 @@ class ResumoPorCorLoteService {
                             }
 
                             const corData = coresMap.get(corId)!;
-                            const qtdFolhasFallback = item.enfestos.reduce((acc: number, enfestoAtual: any) => acc + (Number(enfestoAtual.qtdFolhas) || 0), 0);
-                            corData.qtdFolhas += qtdFolhasFallback;
+                            for (const enfestoAtual of item.enfestos) {
+                                const rolosIdsEnfesto = (enfestoAtual.rolos ?? [])
+                                    .map((enfestoRolo: any) => enfestoRolo.estoqueRoloId ?? enfestoRolo.rolo?.id)
+                                    .filter(Boolean)
+                                    .sort();
+
+                                corData.qtdFolhas += contabilizarQtdFolhasCor(
+                                    corId,
+                                    Number(enfestoAtual.qtdFolhas) || 0,
+                                    rolosIdsEnfesto
+                                );
+                            }
 
                             // Adicionar produto à cor
                             if (!corData.produtos.has(produto.id)) {
@@ -1840,8 +1938,7 @@ class ResumoPorCorLoteService {
                                 });
                             }
 
-                            // Se há enfestos sem cor válida, usa a soma das folhas para manter consistência
-                            const quantidade = Number(item.quantidadePlanejada) * Math.max(qtdFolhasFallback, 1);
+                            const quantidade = Number(item.quantidadePlanejada);
 
                             // Atualizar linha do produto no geral
                             const linhaGeralProd = produtosMapGeral.get(produto.id)!.linhas;
@@ -1886,6 +1983,10 @@ class ResumoPorCorLoteService {
                     const corDoRolo = lote.tecido?.cor;
                     
                     if (!corDoRolo) {
+                        continue;
+                    }
+
+                    if (!corPassaNoFiltro(corDoRolo, corDoRolo?.nome)) {
                         continue;
                     }
 
@@ -1975,13 +2076,6 @@ class ResumoPorCorLoteService {
         }
 
         // Converter mapas para arrays
-        const produtosArray = Array.from(produtosMapGeral.values()).map(prod => ({
-            ...prod,
-            linhas: Array.from(prod.linhas.values()).sort((a: any, b: any) => a.tamanhoOrdem - b.tamanhoOrdem)
-        }));
-
-        const tamanhosArray = Array.from(tamanhosMapGeral.values()).sort((a: any, b: any) => a.ordem - b.ordem);
-
         const coresArray = Array.from(coresMap.values()).map(cor => ({
             ...cor,
             produtos: Array.from(cor.produtos.values()).map((prod: any) => ({
@@ -1991,20 +2085,80 @@ class ResumoPorCorLoteService {
             tamanhos: Array.from(cor.tamanhos.values()).sort((a: any, b: any) => a.ordem - b.ordem)
         }));
 
-        const grandTotal = Array.from(produtosMapGeral.values()).reduce((sum, prod) => sum + prod.total, 0);
+        const totalCores = coresArray.length;
+        const totalPaginas = Math.max(1, Math.ceil(totalCores / pageLimit));
+        const paginaAtual = Math.min(requestedPage, totalPaginas);
+        const inicio = (paginaAtual - 1) * pageLimit;
+        const fim = inicio + pageLimit;
+        const coresPaginadas = coresArray.slice(inicio, fim);
+
+        const produtosMapPaginado = new Map<string, any>();
+        const tamanhosMapPaginado = new Map<string, any>();
+
+        for (const cor of coresPaginadas) {
+            for (const produto of cor.produtos) {
+                if (!produtosMapPaginado.has(produto.id)) {
+                    produtosMapPaginado.set(produto.id, {
+                        id: produto.id,
+                        nome: produto.nome,
+                        sku: produto.sku,
+                        linhas: new Map<string, any>(),
+                        total: 0
+                    });
+                }
+
+                const produtoGlobal = produtosMapPaginado.get(produto.id)!;
+                produtoGlobal.total += Number(produto.total) || 0;
+
+                for (const linha of produto.linhas ?? []) {
+                    if (!produtoGlobal.linhas.has(linha.tamanhoId)) {
+                        produtoGlobal.linhas.set(linha.tamanhoId, {
+                            tamanhoId: linha.tamanhoId,
+                            tamanhoNome: linha.tamanhoNome,
+                            tamanhoOrdem: linha.tamanhoOrdem,
+                            quantidade: 0
+                        });
+                    }
+
+                    produtoGlobal.linhas.get(linha.tamanhoId)!.quantidade += Number(linha.quantidade) || 0;
+                }
+            }
+
+            for (const tamanho of cor.tamanhos) {
+                if (!tamanhosMapPaginado.has(tamanho.id)) {
+                    tamanhosMapPaginado.set(tamanho.id, {
+                        id: tamanho.id,
+                        nome: tamanho.nome,
+                        ordem: tamanho.ordem,
+                        total: 0
+                    });
+                }
+
+                tamanhosMapPaginado.get(tamanho.id)!.total += Number(tamanho.total) || 0;
+            }
+        }
+
+        const produtosArrayPaginado = Array.from(produtosMapPaginado.values()).map(prod => ({
+            ...prod,
+            linhas: Array.from(prod.linhas.values()).sort((a: any, b: any) => a.tamanhoOrdem - b.tamanhoOrdem)
+        }));
+
+        const tamanhosArrayPaginado = Array.from(tamanhosMapPaginado.values()).sort((a: any, b: any) => a.ordem - b.ordem);
+
+        const grandTotal = Array.from(produtosArrayPaginado).reduce((sum, prod) => sum + Number(prod.total || 0), 0);
 
         return {
             totalGeral: {
-                produtos: produtosArray,
-                tamanhos: tamanhosArray,
+                produtos: produtosArrayPaginado,
+                tamanhos: tamanhosArrayPaginado,
                 grandTotal
             },
-            cores: coresArray,
+            cores: coresPaginadas,
             paginacao: {
-                paginaAtual: pageNumber,
+                paginaAtual,
                 itensPorPagina: pageLimit,
-                totalItens: total,
-                totalPaginas: Math.ceil(total / pageLimit)
+                totalItens: totalCores,
+                totalPaginas
             }
         };
     }
