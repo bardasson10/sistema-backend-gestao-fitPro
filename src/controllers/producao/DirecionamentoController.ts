@@ -93,12 +93,13 @@ class ListarGradesSobraController {
 class ListRemessasProntasController {
     async handle(req: Request, res: Response) {
         const { page, limit } = req.query;
-        // Remessas prontas são aquelas com status entregue
+        // Remessas prontas sao status entregue e sem conferencia em andamento/finalizada.
         const remessas = await new ListAllDirecionamentoService().execute(
             "entregue",
             undefined,
             page as string | number | undefined,
-            limit as string | number | undefined
+            limit as string | number | undefined,
+            true
         );
         return res.json(remessas);
     }

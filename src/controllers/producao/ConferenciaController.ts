@@ -3,13 +3,14 @@ import { CreateConferenciaService, ListAllConferenciaService, ListByIdConferenci
 
 class CreateConferenciaController {
     async handle(req: Request, res: Response) {
-        const { direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items } = req.body;
+        const { direcionamentoId, responsavelId, dataConferencia, statusQualidade, produtoSKU, liberadoPagamento, observacao, items } = req.body;
 
         const conferencia = await new CreateConferenciaService().execute({
             direcionamentoId,
             responsavelId,
             dataConferencia,
             statusQualidade,
+            produtoSKU,
             liberadoPagamento,
             observacao,
             items
@@ -53,12 +54,13 @@ class ListByIdConferenciaController {
 class UpdateConferenciaController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string 
-        const { direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items } = req.body;
+        const { direcionamentoId, responsavelId, dataConferencia, statusQualidade, produtoSKU, liberadoPagamento, observacao, items } = req.body;
         const conferencia = await new UpdateConferenciaService().execute(id, {
             direcionamentoId,
             responsavelId,
             dataConferencia,
             statusQualidade,
+            produtoSKU,
             liberadoPagamento,
             observacao,
             items

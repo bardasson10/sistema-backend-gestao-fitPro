@@ -221,6 +221,7 @@ const direcionamentoListItemSchema = z.object({
 
 const conferenciaItemSchema = z.object({
     id: z.string().uuid(),
+    direcionamentoItemId: z.string().uuid(),
     quantidadeEnviada: z.number().int().nonnegative(),
     qtdRecebida: z.number().int().nonnegative(),
     qtdDefeito: z.number().int().nonnegative(),
@@ -259,6 +260,18 @@ const conferenciaSchema = z.object({
         }),
     }),
     items: z.array(conferenciaItemSchema),
+    pagamento: z.object({
+        totalCalculado: z.number().nonnegative(),
+        valorPago: z.number().nonnegative(),
+        valorAPagar: z.number().nonnegative(),
+        porSku: z.array(z.object({
+            sku: z.string(),
+            quantidadeRecebida: z.number().int().nonnegative(),
+            quantidadeAprovada: z.number().int().nonnegative(),
+            valorUnitario: z.number().nonnegative(),
+            subtotal: z.number().nonnegative(),
+        })),
+    }),
 });
 
 const paginatedFaccoesSchema = z.object({
@@ -304,15 +317,15 @@ const relatorioProdutividadeSchema = z.object({
         fim: z.string()
     }),
     totalConferencias: z.number().int(),
-    conformes: z.number().int(),
-    naoConformes: z.number().int(),
-    comDefeito: z.number().int(),
-    taxaConformidade: z.string(),
+    aprovados: z.number().int(),
+    aprovadosParcial: z.number().int(),
+    aprovadosDefeito: z.number().int(),
+    taxaAprovacao: z.string(),
     pagasAutorizadas: z.number().int(),
     porFaccao: z.record(z.string(), z.object({
         total: z.number().int(),
-        conforme: z.number().int(),
-        defeitos: z.number().int()
+        aprovado: z.number().int(),
+        aprovadoDefeito: z.number().int()
     }))
 });
 

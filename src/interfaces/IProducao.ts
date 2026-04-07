@@ -159,7 +159,8 @@ export interface IGradeSobraResponse {
 
 // Conferencia
 export interface IConferenciaItemInput {
-    direcionamentoItemId: string;
+    id?: string;
+    direcionamentoItemId?: string;
     qtdRecebida: number;
     qtdDefeito?: number;
 }
@@ -168,7 +169,8 @@ export interface ICreateConferenciaRequest {
     direcionamentoId: string;
     responsavelId: string;
     dataConferencia?: string;
-    statusQualidade?: string;
+    statusQualidade?: "recebido" | "em_conferencia" | "aprovado" | "aprovado_parcial" | "aprovado_defeito";
+    produtoSKU?: IProdutoSKUValorFaccaoInput[];
     liberadoPagamento?: boolean;
     observacao?: string;
     items?: IConferenciaItemInput[];
@@ -178,7 +180,8 @@ export interface IUpdateConferenciaRequest {
     direcionamentoId?: string;
     responsavelId?: string;
     dataConferencia?: string;
-    statusQualidade?: string;
+    statusQualidade?: "recebido" | "em_conferencia" | "aprovado" | "aprovado_parcial" | "aprovado_defeito";
+    produtoSKU?: IProdutoSKUValorFaccaoInput[];
     liberadoPagamento?: boolean;
     observacao?: string;
     items?: IConferenciaItemInput[];
@@ -191,7 +194,7 @@ export interface IConferenciaResponse {
     dataConferencia?: Date;
     observacao?: string;
     liberadoPagamento: boolean;
-    statusQualidade?: string;
+    statusQualidade?: "recebido" | "em_conferencia" | "aprovado" | "aprovado_parcial" | "aprovado_defeito";
     createdAt: Date;
     updatedAt: Date;
 }

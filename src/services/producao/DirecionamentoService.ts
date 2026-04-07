@@ -335,18 +335,33 @@ class CreateDirecionamentoService {
 }
 
 class ListAllDirecionamentoService {
-    async execute(status?: QueryFilterValue, faccaoId?: QueryFilterValue, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+    async execute(status?: QueryFilterValue, faccaoId?: QueryFilterValue, page?: number | string, limit?: number | string, somenteProntasParaConferencia = false): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
         const statusArray = normalizarQueryParaArray(status);
         const faccaoIdArray = normalizarQueryParaArray(faccaoId);
 
+        const whereBase: any = {
+            ...(statusArray.length > 0 && { status: { in: statusArray } }),
+            ...(faccaoIdArray.length > 0 && { faccaoId: { in: faccaoIdArray } })
+        };
+
+        if (somenteProntasParaConferencia) {
+            whereBase.NOT = {
+                conferencias: {
+                    some: {
+                        OR: [
+                            { status: null },
+                            { status: { not: "recebido" } }
+                        ]
+                    }
+                }
+            };
+        }
+
         const [direcionamentos, total] = await Promise.all([
             prismaClient.direcionamento.findMany({
-                where: {
-                    ...(statusArray.length > 0 && { status: { in: statusArray } }),
-                    ...(faccaoIdArray.length > 0 && { faccaoId: { in: faccaoIdArray } })
-                },
+                where: whereBase,
                 select: direcionamentoListSelect,
                 skip,
                 take: pageLimit,
@@ -355,10 +370,7 @@ class ListAllDirecionamentoService {
                 }
             }),
             prismaClient.direcionamento.count({
-                where: {
-                    ...(statusArray.length > 0 && { status: { in: statusArray } }),
-                    ...(faccaoIdArray.length > 0 && { faccaoId: { in: faccaoIdArray } })
-                }
+                where: whereBase
             })
         ]);
 
@@ -639,7 +651,7 @@ class UpdateDirecionamentoStatusService {
                             direcionamentoId: id,
                             responsavelId,
                             dataConferencia: new Date(),
-                            status: "validando",
+                            status: "recebido",
                             liberadoPagamento: false
                         }
                     });

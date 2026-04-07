@@ -149,13 +149,25 @@ export const createConferenciaSchema = z.object({
         direcionamentoId: z.uuid("ID de direcionamento inválido"),
         responsavelId: z.uuid("ID de responsável inválido"),
         dataConferencia: z.coerce.date().optional(),
-        statusQualidade: z.enum(["validando", "conforme", "nao_conforme", "com_defeito"]).optional(),
+        statusQualidade: z.enum(["recebido", "em_conferencia", "aprovado", "aprovado_parcial", "aprovado_defeito"]).optional(),
+        produtoSKU: z.array(z.object({
+            sku: z.string().min(1, "SKU é obrigatório"),
+            valorFaccaoPorPeca: z.coerce.number().positive("Valor por peça deve ser maior que zero"),
+        })).optional(),
         liberadoPagamento: z.boolean().optional(),
         observacao: z.string().optional(),
         items: z.array(z.object({
-            direcionamentoItemId: z.uuid("ID de item do direcionamento inválido"),
+            id: z.uuid("ID de item da conferência inválido").optional(),
+            direcionamentoItemId: z.uuid("ID de item do direcionamento inválido").optional(),
             qtdRecebida: z.number().int().positive("Quantidade deve ser positiva"),
             qtdDefeito: z.number().int().nonnegative("Defeitos não podem ser negativos").optional(),
+        }).superRefine((item, ctx) => {
+            if (!item.id && !item.direcionamentoItemId) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "Informe id ou direcionamentoItemId para o item da conferência."
+                });
+            }
         })).optional(),
     }),
 });
@@ -165,13 +177,25 @@ export const updateConferenciaSchema = z.object({
         direcionamentoId: z.uuid("ID de direcionamento inválido").optional(),
         responsavelId: z.uuid("ID de responsável inválido").optional(),
         dataConferencia: z.coerce.date().optional(),
-        statusQualidade: z.enum(["validando", "conforme", "nao_conforme", "com_defeito"]).optional(),
+        statusQualidade: z.enum(["recebido", "em_conferencia", "aprovado", "aprovado_parcial", "aprovado_defeito"]).optional(),
+        produtoSKU: z.array(z.object({
+            sku: z.string().min(1, "SKU é obrigatório"),
+            valorFaccaoPorPeca: z.coerce.number().positive("Valor por peça deve ser maior que zero"),
+        })).optional(),
         liberadoPagamento: z.boolean().optional(),
         observacao: z.string().optional(),
         items: z.array(z.object({
-            direcionamentoItemId: z.uuid("ID de item do direcionamento inválido"),
+            id: z.uuid("ID de item da conferência inválido").optional(),
+            direcionamentoItemId: z.uuid("ID de item do direcionamento inválido").optional(),
             qtdRecebida: z.number().int().positive("Quantidade deve ser positiva"),
             qtdDefeito: z.number().int().nonnegative("Defeitos não podem ser negativos").optional(),
+        }).superRefine((item, ctx) => {
+            if (!item.id && !item.direcionamentoItemId) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "Informe id ou direcionamentoItemId para o item da conferência."
+                });
+            }
         })).optional(),
     }),
     params: z.object({
@@ -183,7 +207,7 @@ export const listConferenciaSchema = z.object({
     query: z.object({
         page: z.coerce.number().int().positive().optional(),
         limit: z.coerce.number().int().positive().optional(),
-        statusQualidade: z.enum(["validando", "conforme", "nao_conforme", "com_defeito"]).optional(),
+        statusQualidade: z.enum(["recebido", "em_conferencia", "aprovado", "aprovado_parcial", "aprovado_defeito"]).optional(),
         liberadoPagamento: z.coerce.boolean().optional(),
     }).optional(),
 });
@@ -211,6 +235,7 @@ export const conferenciaResponseSchema = z.object({
     }),
     items: z.array(z.object({
         id: z.string().uuid(),
+        direcionamentoItemId: z.string().uuid(),
         quantidadeEnviada: z.number().int().nonnegative(),
         qtdRecebida: z.number().int().nonnegative(),
         qtdDefeito: z.number().int().nonnegative(),
@@ -227,6 +252,18 @@ export const conferenciaResponseSchema = z.object({
         }),
         lote: z.string(),
     })),
+    pagamento: z.object({
+        totalCalculado: z.number().nonnegative(),
+        valorPago: z.number().nonnegative(),
+        valorAPagar: z.number().nonnegative(),
+        porSku: z.array(z.object({
+            sku: z.string(),
+            quantidadeRecebida: z.number().int().nonnegative(),
+            quantidadeAprovada: z.number().int().nonnegative(),
+            valorUnitario: z.number().nonnegative(),
+            subtotal: z.number().nonnegative(),
+        })),
+    }),
 });
 
 // Schema para resposta paginada de Conferências

@@ -2,6 +2,128 @@ import { ICreateConferenciaRequest, IUpdateConferenciaRequest } from "../../inte
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
+const STATUS_RECEBIDO = "recebido";
+const STATUS_APROVADO = "aprovado";
+const STATUS_APROVADO_PARCIAL = "aprovado_parcial";
+const STATUS_APROVADO_DEFEITO = "aprovado_defeito";
+
+const STATUS_FINAIS_SEM_EDICAO = [STATUS_APROVADO, STATUS_APROVADO_DEFEITO] as const;
+const STATUS_QUE_PERMITEM_PAGAMENTO_TRUE = [STATUS_APROVADO, STATUS_APROVADO_PARCIAL, STATUS_APROVADO_DEFEITO] as const;
+
+function roundCurrency(value: number): number {
+    return Math.round(value * 100) / 100;
+}
+
+async function normalizeConferenciaItems(
+    tx: any,
+    conferenciaId: string | undefined,
+    items: Array<{ id?: string; direcionamentoItemId?: string; qtdRecebida: number; qtdDefeito?: number }>
+): Promise<Array<{ direcionamentoItemId: string; qtdRecebida: number; qtdDefeito?: number }>> {
+    const itensComDirecionamento = items
+        .filter((item) => Boolean(item.direcionamentoItemId))
+        .map((item) => ({
+            direcionamentoItemId: item.direcionamentoItemId as string,
+            qtdRecebida: item.qtdRecebida,
+            qtdDefeito: item.qtdDefeito
+        }));
+
+    const idsConferenciaItem = [...new Set(
+        items
+            .map((item) => item.id)
+            .filter((itemId): itemId is string => Boolean(itemId))
+    )];
+
+    if (idsConferenciaItem.length === 0) {
+        return itensComDirecionamento;
+    }
+
+    const where: any = {
+        id: {
+            in: idsConferenciaItem
+        }
+    };
+
+    if (conferenciaId) {
+        where.conferenciaId = conferenciaId;
+    }
+
+    const conferenciaItems = await tx.conferenciaItem.findMany({
+        where,
+        select: {
+            id: true,
+            direcionamentoItemId: true
+        }
+    });
+
+    if (conferenciaItems.length !== idsConferenciaItem.length) {
+        throw new Error("Um ou mais itens da conferência não foram encontrados.");
+    }
+
+    const mapaConferenciaItem = new Map(conferenciaItems.map((item: any) => [item.id, item.direcionamentoItemId]));
+
+    const itensNormalizadosViaId = items
+        .filter((item) => !item.direcionamentoItemId && item.id)
+        .map((item) => ({
+            direcionamentoItemId: mapaConferenciaItem.get(item.id as string) as string,
+            qtdRecebida: item.qtdRecebida,
+            qtdDefeito: item.qtdDefeito
+        }));
+
+    return [...itensComDirecionamento, ...itensNormalizadosViaId];
+}
+
+async function applySkuValuesOnDirecionamento(
+    tx: any,
+    direcionamentoId: string,
+    produtoSKU: Array<{ sku: string; valorFaccaoPorPeca: number }>
+): Promise<void> {
+    const skusDuplicados = produtoSKU
+        .map((item) => item.sku)
+        .filter((sku, index, array) => array.indexOf(sku) !== index);
+
+    if (skusDuplicados.length > 0) {
+        throw new Error(`SKU duplicado no payload: ${skusDuplicados[0]}.`);
+    }
+
+    const itensDirecionamento = await tx.direcionamentoItem.findMany({
+        where: { direcionamentoId },
+        include: {
+            estoqueCorte: {
+                include: {
+                    produto: {
+                        select: { sku: true }
+                    }
+                }
+            }
+        }
+    });
+
+    const skusDirecionamento = new Set(itensDirecionamento.map((item: any) => item.estoqueCorte.produto.sku));
+
+    for (const itemSku of produtoSKU) {
+        if (!skusDirecionamento.has(itemSku.sku)) {
+            throw new Error(`O SKU ${itemSku.sku} não pertence a este direcionamento.`);
+        }
+    }
+
+    for (const itemSku of produtoSKU) {
+        const idsItensSku = itensDirecionamento
+            .filter((item: any) => item.estoqueCorte.produto.sku === itemSku.sku)
+            .map((item: any) => item.id);
+
+        await tx.direcionamentoItem.updateMany({
+            where: {
+                id: {
+                    in: idsItensSku
+                }
+            },
+            data: {
+                valorFaccaoPorPeca: itemSku.valorFaccaoPorPeca
+            }
+        });
+    }
+}
+
 const conferenciaDirecionamentoInclude = {
     faccao: true,
     items: {
@@ -55,6 +177,7 @@ interface IConferenciaResponse {
     };
     items: Array<{
         id: string;
+        direcionamentoItemId: string;
         quantidadeEnviada: number;
         qtdRecebida: number;
         qtdDefeito: number;
@@ -71,9 +194,57 @@ interface IConferenciaResponse {
         };
         lote: string;
     }>;
+    pagamento: {
+        totalCalculado: number;
+        valorPago: number;
+        valorAPagar: number;
+        porSku: Array<{
+            sku: string;
+            quantidadeRecebida: number;
+            quantidadeAprovada: number;
+            valorUnitario: number;
+            subtotal: number;
+        }>;
+    };
 }
 
 function mapConferenciaToResponse(conferencia: any): IConferenciaResponse {
+    const pagamentoPorSku = new Map<string, {
+        sku: string;
+        quantidadeRecebida: number;
+        quantidadeAprovada: number;
+        valorUnitario: number;
+        subtotal: number;
+    }>();
+
+    conferencia.items.forEach((item: any) => {
+        const sku = item.direcionamentoItem.estoqueCorte.produto.sku;
+        const quantidadeRecebida = item.qtdRecebida;
+        const quantidadeAprovada = Math.max(item.qtdRecebida - item.qtdDefeito, 0);
+        const valorUnitario = Number(item.direcionamentoItem.valorFaccaoPorPeca || 0);
+        const subtotal = roundCurrency(quantidadeAprovada * valorUnitario);
+
+        const atual = pagamentoPorSku.get(sku);
+        if (atual) {
+            atual.quantidadeRecebida += quantidadeRecebida;
+            atual.quantidadeAprovada += quantidadeAprovada;
+            atual.subtotal = roundCurrency(atual.subtotal + subtotal);
+        } else {
+            pagamentoPorSku.set(sku, {
+                sku,
+                quantidadeRecebida,
+                quantidadeAprovada,
+                valorUnitario,
+                subtotal,
+            });
+        }
+    });
+
+    const porSku = Array.from(pagamentoPorSku.values());
+    const totalCalculado = roundCurrency(porSku.reduce((acc, item) => acc + item.subtotal, 0));
+    const valorPago = conferencia.liberadoPagamento ? totalCalculado : 0;
+    const valorAPagar = conferencia.liberadoPagamento ? 0 : totalCalculado;
+
     return {
         id: conferencia.id,
         dataConferencia: conferencia.dataConferencia ? conferencia.dataConferencia.toISOString().split('T')[0] : null,
@@ -100,6 +271,7 @@ function mapConferenciaToResponse(conferencia: any): IConferenciaResponse {
 
             return {
                 id: item.id,
+                direcionamentoItemId: item.direcionamentoItemId,
                 quantidadeEnviada,
                 qtdRecebida: item.qtdRecebida,
                 qtdDefeito: item.qtdDefeito,
@@ -116,12 +288,18 @@ function mapConferenciaToResponse(conferencia: any): IConferenciaResponse {
                 },
                 lote: item.direcionamentoItem.estoqueCorte.lote.codigoLote
             };
-        })
+        }),
+        pagamento: {
+            totalCalculado,
+            valorPago,
+            valorAPagar,
+            porSku,
+        }
     };
 }
 
 class CreateConferenciaService {
-    async execute({ direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items }: ICreateConferenciaRequest) {
+    async execute({ direcionamentoId, responsavelId, dataConferencia, statusQualidade, produtoSKU, liberadoPagamento, observacao, items }: ICreateConferenciaRequest) {
         // Verificar se direcionamento existe
         const direcionamento = await prismaClient.direcionamento.findUnique({
             where: { id: direcionamentoId }
@@ -140,8 +318,12 @@ class CreateConferenciaService {
             throw new Error("Responsável não encontrado.");
         }
 
-        if (items?.length) {
-            const direcionamentoItemIds = [...new Set(items.map(item => item.direcionamentoItemId))];
+        const itemsNormalizados = items?.length
+            ? await normalizeConferenciaItems(prismaClient, undefined, items)
+            : [];
+
+        if (itemsNormalizados.length > 0) {
+            const direcionamentoItemIds = [...new Set(itemsNormalizados.map(item => item.direcionamentoItemId))];
             const itensDirecionamento = await prismaClient.direcionamentoItem.findMany({
                 where: {
                     id: { in: direcionamentoItemIds },
@@ -155,40 +337,45 @@ class CreateConferenciaService {
             }
         }
 
-        // Validar regra: só pode liberar pagamento se statusQualidade for "conforme"
-        const statusFinal = statusQualidade || "validando";
-        const liberadoFinal = liberadoPagamento !== undefined ? liberadoPagamento : false;
-        
-        if (liberadoFinal && statusFinal !== "conforme") {
-            throw new Error("Não é possível liberar pagamento para conferências não conformes.");
+        const statusFinal = statusQualidade || STATUS_RECEBIDO;
+        let liberadoFinal = liberadoPagamento !== undefined ? liberadoPagamento : false;
+
+        if (liberadoFinal && !STATUS_QUE_PERMITEM_PAGAMENTO_TRUE.includes(statusFinal as (typeof STATUS_QUE_PERMITEM_PAGAMENTO_TRUE)[number])) {
+            throw new Error("Não é possível definir pagamento como true sem status de aprovação.");
         }
 
-        // Criar conferência com items
-        const conferencia = await prismaClient.conferencia.create({
-            data: {
-                direcionamentoId,
-                responsavelId,
-                dataConferencia: dataConferencia ? new Date(dataConferencia) : new Date(),
-            status: statusFinal,
-                observacao,
-                liberadoPagamento: liberadoFinal,
-                items: items ? {
-                    create: items.map(item => ({
-                        direcionamentoItemId: item.direcionamentoItemId,
-                        qtdRecebida: item.qtdRecebida,
-                        qtdDefeito: item.qtdDefeito || 0
-                    }))
-                } : undefined
-            },
-            include: {
-                direcionamento: {
-                    include: conferenciaDirecionamentoInclude
-                },
-                responsavel: true,
-                items: {
-                    include: conferenciaItemsInclude
-                }
+        // Criar conferência com items e opcionalmente atualizar valor por SKU do direcionamento.
+        const conferencia = await prismaClient.$transaction(async (tx) => {
+            if (produtoSKU?.length) {
+                await applySkuValuesOnDirecionamento(tx, direcionamentoId, produtoSKU);
             }
+
+            return tx.conferencia.create({
+                data: {
+                    direcionamentoId,
+                    responsavelId,
+                    dataConferencia: dataConferencia ? new Date(dataConferencia) : new Date(),
+                    status: statusFinal,
+                    observacao,
+                    liberadoPagamento: liberadoFinal,
+                    items: itemsNormalizados.length > 0 ? {
+                        create: itemsNormalizados.map(item => ({
+                            direcionamentoItemId: item.direcionamentoItemId,
+                            qtdRecebida: item.qtdRecebida,
+                            qtdDefeito: item.qtdDefeito || 0
+                        }))
+                    } : undefined
+                },
+                include: {
+                    direcionamento: {
+                        include: conferenciaDirecionamentoInclude
+                    },
+                    responsavel: true,
+                    items: {
+                        include: conferenciaItemsInclude
+                    }
+                }
+            });
         });
 
         return mapConferenciaToResponse(conferencia);
@@ -199,28 +386,32 @@ class ListAllConferenciaService {
     async execute(statusQualidade?: string, liberadoPagamento?: boolean, page?: number | string, limit?: number | string): Promise<PaginatedResponse<IConferenciaResponse>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        // Por padrão, mostrar apenas conferências que:
-        // - NÃO estão em (statusQualidade === "conforme" AND liberadoPagamento === true)
-        // Ou seja, mostrar as que ainda precisam de ação
-        let whereCondition: any = {};
+        const andConditions: any[] = [
+            {
+                NOT: {
+                    status: STATUS_RECEBIDO
+                }
+            }
+        ];
         
         if (statusQualidade || liberadoPagamento !== undefined) {
-            // Se filtros são passados, usar eles
-            whereCondition = {
+            andConditions.push({
                 ...(statusQualidade && { status: statusQualidade }),
                 ...(liberadoPagamento !== undefined && { liberadoPagamento })
-            };
+            });
         } else {
-            // Padrão: NãO mostrar conferencias finalizadas (conforme + pagamento liberado)
-            whereCondition = {
+            // Padrão: não mostrar conferências finalizadas com pagamento liberado.
+            andConditions.push({
                 NOT: {
                     AND: [
-                        { status: "conforme" },
+                        { status: { in: [STATUS_APROVADO, STATUS_APROVADO_DEFEITO] } },
                         { liberadoPagamento: true }
                     ]
                 }
-            };
+            });
         }
+
+        const whereCondition: any = { AND: andConditions };
 
         const [conferencias, total] = await Promise.all([
             prismaClient.conferencia.findMany({
@@ -274,7 +465,7 @@ class ListByIdConferenciaService {
 }
 
 class UpdateConferenciaService {
-    async execute(id: string, { direcionamentoId, responsavelId, dataConferencia, statusQualidade, liberadoPagamento, observacao, items }: IUpdateConferenciaRequest): Promise<IConferenciaResponse> {
+    async execute(id: string, { direcionamentoId, responsavelId, dataConferencia, statusQualidade, produtoSKU, liberadoPagamento, observacao, items }: IUpdateConferenciaRequest): Promise<IConferenciaResponse> {
         const conferencia = await prismaClient.conferencia.findUnique({
             where: { id }
         });
@@ -283,9 +474,26 @@ class UpdateConferenciaService {
             throw new Error("Conferência não encontrada.");
         }
 
+        if (STATUS_FINAIS_SEM_EDICAO.includes((conferencia.status || "") as (typeof STATUS_FINAIS_SEM_EDICAO)[number])) {
+            throw new Error("Não é possível editar conferências com status final.");
+        }
+
+        if (conferencia.status === STATUS_APROVADO_PARCIAL) {
+            const tentativaEdicaoBloqueada = direcionamentoId !== undefined
+                || responsavelId !== undefined
+                || dataConferencia !== undefined
+            || observacao !== undefined;
+
+            if (tentativaEdicaoBloqueada) {
+                throw new Error("Conferências em status 'aprovado_parcial' permitem editar apenas status e itens.");
+            }
+        }
+
         const statusFinal = statusQualidade ?? conferencia.status;
-        if (liberadoPagamento === true && statusFinal !== "conforme") {
-            throw new Error("Não é possível liberar pagamento para conferências não conforme.");
+        let liberadoFinal = liberadoPagamento;
+
+        if (liberadoFinal === true && !STATUS_QUE_PERMITEM_PAGAMENTO_TRUE.includes(statusFinal as (typeof STATUS_QUE_PERMITEM_PAGAMENTO_TRUE)[number])) {
+            throw new Error("Não é possível definir pagamento como true sem status de aprovação.");
         }
 
         const conferenciaAtualizada = await prismaClient.$transaction(async (tx) => {
@@ -309,7 +517,8 @@ class UpdateConferenciaService {
 
             if (items) {
                 const direcionamentoAlvoId = direcionamentoId ?? conferencia.direcionamentoId;
-                const direcionamentoItemIds = [...new Set(items.map(item => item.direcionamentoItemId))];
+                const itemsNormalizados = await normalizeConferenciaItems(tx, id, items);
+                const direcionamentoItemIds = [...new Set(itemsNormalizados.map(item => item.direcionamentoItemId))];
                 const itensDirecionamento = await tx.direcionamentoItem.findMany({
                     where: {
                         id: { in: direcionamentoItemIds },
@@ -328,7 +537,7 @@ class UpdateConferenciaService {
 
                 if (items.length > 0) {
                     await tx.conferenciaItem.createMany({
-                        data: items.map(item => ({
+                        data: itemsNormalizados.map(item => ({
                             conferenciaId: id,
                             direcionamentoItemId: item.direcionamentoItemId,
                             qtdRecebida: item.qtdRecebida,
@@ -338,6 +547,11 @@ class UpdateConferenciaService {
                 }
             }
 
+            if (produtoSKU?.length) {
+                const direcionamentoAlvoId = direcionamentoId ?? conferencia.direcionamentoId;
+                await applySkuValuesOnDirecionamento(tx, direcionamentoAlvoId, produtoSKU);
+            }
+
             return tx.conferencia.update({
                 where: { id },
                 data: {
@@ -345,7 +559,7 @@ class UpdateConferenciaService {
                     ...(responsavelId && { responsavelId }),
                     ...(dataConferencia && { dataConferencia: new Date(dataConferencia) }),
                     ...(statusQualidade && { status: statusQualidade }),
-                    ...(liberadoPagamento !== undefined && { liberadoPagamento }),
+                    ...(liberadoFinal !== undefined && { liberadoPagamento: liberadoFinal }),
                     ...(observacao !== undefined && { observacao })
                 },
                 include: {
@@ -435,9 +649,9 @@ class GetRelatorioProdutividadeService {
         }
 
         const totalConferencias = conferencias.length;
-        const conformes = conferencias.filter(c => c.status === "conforme").length;
-        const naoConformes = conferencias.filter(c => c.status === "nao_conforme").length;
-        const comDefeito = conferencias.filter(c => c.status === "com_defeito").length;
+        const aprovados = conferencias.filter(c => c.status === STATUS_APROVADO).length;
+        const aprovadosParcial = conferencias.filter(c => c.status === STATUS_APROVADO_PARCIAL).length;
+        const aprovadosDefeito = conferencias.filter(c => c.status === STATUS_APROVADO_DEFEITO).length;
         const pagasAutorizadas = conferencias.filter(c => c.liberadoPagamento === true).length;
 
         // Agrupar por facção
@@ -447,13 +661,13 @@ class GetRelatorioProdutividadeService {
             if (!porFaccao[faccaoNome]) {
                 porFaccao[faccaoNome] = {
                     total: 0,
-                    conforme: 0,
-                    defeitos: 0
+                    aprovado: 0,
+                    aprovadoDefeito: 0
                 };
             }
             porFaccao[faccaoNome].total++;
-            if (conf.status === "conforme") porFaccao[faccaoNome].conforme++;
-            if (conf.status === "com_defeito") porFaccao[faccaoNome].defeitos++;
+            if (conf.status === STATUS_APROVADO) porFaccao[faccaoNome].aprovado++;
+            if (conf.status === STATUS_APROVADO_DEFEITO) porFaccao[faccaoNome].aprovadoDefeito++;
         });
 
         return {
@@ -462,10 +676,10 @@ class GetRelatorioProdutividadeService {
                 fim: periodoFim
             },
             totalConferencias,
-            conformes,
-            naoConformes,
-            comDefeito,
-            taxaConformidade: totalConferencias > 0 ? (conformes / totalConferencias * 100).toFixed(2) + "%" : "0%",
+            aprovados,
+            aprovadosParcial,
+            aprovadosDefeito,
+            taxaAprovacao: totalConferencias > 0 ? (aprovados / totalConferencias * 100).toFixed(2) + "%" : "0%",
             pagasAutorizadas,
             porFaccao
         };
