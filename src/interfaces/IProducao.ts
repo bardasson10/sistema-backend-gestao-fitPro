@@ -126,6 +126,11 @@ export interface IUpdateDirecionamentoRequest {
     direcionamentos: IDirecionamentoInput[];
 }
 
+export interface IEditDirecionamentoItemsRequest {
+    itensAdicionar?: IDirecionamentoItemInput[];
+    itensRemover?: IDirecionamentoItemInput[];
+}
+
 export interface IUpdateDirecionamentoStatusRequest {
     status: "separado" | "em_producao" | "entregue";
 }

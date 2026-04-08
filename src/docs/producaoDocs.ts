@@ -8,6 +8,7 @@ import {
     addRolosLoteSchema,
     createDirecionamentoSchema,
     updateDirecionamentoSchema,
+    updateDirecionamentoItemsSchema,
     updateDirecionamentoStatusSchema,
     updateDirecionamentoSkuPriceSchema,
     createConferenciaSchema,
@@ -1007,6 +1008,46 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         responses: {
             200: {
                 description: 'Direcionamento atualizado',
+                content: {
+                    'application/json': {
+                        schema: direcionamentoSchema
+                    }
+                }
+            },
+            404: {
+                description: 'Direcionamento não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
+            }
+        }
+    });
+
+    // PUT /direcionamentos/{id}/status - Atualizar status do direcionamento
+    registry.registerPath({
+        method: 'put',
+        path: '/direcionamentos/{id}/itens',
+        tags: [TAG_DIRECIONAMENTOS],
+        summary: 'Editar itens da remessa (adicionar/remover)',
+        description: 'Permite adicionar e remover quantidades por estoqueCorteId em uma remessa com status separado.',
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: updateDirecionamentoItemsSchema.shape.body
+                    }
+                }
+            },
+            params: z.object({
+                id: z.uuid()
+            })
+        },
+        security: [{ bearerAuth: [] }],
+        responses: {
+            200: {
+                description: 'Itens da remessa atualizados',
                 content: {
                     'application/json': {
                         schema: direcionamentoSchema

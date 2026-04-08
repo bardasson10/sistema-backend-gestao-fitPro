@@ -4,6 +4,7 @@ import {
     ListAllDirecionamentoService,
     ListByIdDirecionamentoService,
     UpdateDirecionamentoService,
+    EditDirecionamentoItemsService,
     UpdateDirecionamentoStatusService,
     UpdateDirecionamentoSkuPriceService,
     DeleteDirecionamentoService
@@ -47,6 +48,18 @@ class UpdateDirecionamentoController {
         const { direcionamentos } = req.body;
         const direcionamento = await new UpdateDirecionamentoService().execute(id, {
             direcionamentos
+        });
+        return res.json(direcionamento);
+    }
+}
+
+class EditDirecionamentoItemsController {
+    async handle(req: Request, res: Response) {
+        const id = req.params.id as string;
+        const { itensAdicionar, itensRemover } = req.body;
+        const direcionamento = await new EditDirecionamentoItemsService().execute(id, {
+            itensAdicionar,
+            itensRemover
         });
         return res.json(direcionamento);
     }
@@ -110,6 +123,7 @@ export {
     ListAllDirecionamentoController,
     ListByIdDirecionamentoController,
     UpdateDirecionamentoController,
+    EditDirecionamentoItemsController,
     UpdateDirecionamentoStatusController,
     UpdateDirecionamentoSkuPriceController,
     DeleteDirecionamentoController,

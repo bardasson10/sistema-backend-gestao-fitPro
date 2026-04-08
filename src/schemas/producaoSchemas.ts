@@ -123,6 +123,33 @@ export const updateDirecionamentoSchema = z.object({
     }),
 });
 
+export const updateDirecionamentoItemsSchema = z.object({
+    body: z.object({
+        itensAdicionar: z.array(z.object({
+            estoqueCorteId: z.uuid("ID de estoque de corte inválido"),
+            quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
+        })).min(1, "Informe ao menos um item para adicionar.").optional(),
+        itensRemover: z.array(z.object({
+            estoqueCorteId: z.uuid("ID de estoque de corte inválido"),
+            quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
+        })).min(1, "Informe ao menos um item para remover.").optional(),
+    }).superRefine((body, ctx) => {
+        const possuiItensAdicionar = (body.itensAdicionar?.length ?? 0) > 0;
+        const possuiItensRemover = (body.itensRemover?.length ?? 0) > 0;
+
+        if (!possuiItensAdicionar && !possuiItensRemover) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Informe ao menos um item para adicionar ou remover.",
+                path: ["itensAdicionar"],
+            });
+        }
+    }),
+    params: z.object({
+        id: z.uuid("ID inválido"),
+    }),
+});
+
 export const updateDirecionamentoStatusSchema = z.object({
     body: z.object({
         status: z.enum(["separado", "em_producao", "entregue"]),

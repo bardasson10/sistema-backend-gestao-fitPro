@@ -40,6 +40,7 @@ import {
 	ListAllDirecionamentoController,
 	ListByIdDirecionamentoController,
 	UpdateDirecionamentoController,
+	EditDirecionamentoItemsController,
 	UpdateDirecionamentoStatusController,
 	UpdateDirecionamentoSkuPriceController,
 	DeleteDirecionamentoController,
@@ -56,6 +57,7 @@ import {
 	addRolosLoteSchema,
 	createDirecionamentoSchema,
 	updateDirecionamentoSchema,
+	updateDirecionamentoItemsSchema,
 	updateDirecionamentoStatusSchema,
 	updateDirecionamentoSkuPriceSchema,
 	createConferenciaSchema,
@@ -165,6 +167,7 @@ router.get("/direcionamentos", isAuthenticated, new ListAllDirecionamentoControl
 router.get("/direcionamentos/prontas", isAuthenticated, new ListRemessasProntasController().handle);
 router.get("/direcionamentos/:id", isAuthenticated, new ListByIdDirecionamentoController().handle);
 router.put("/direcionamentos/:id", isAuthenticated, validateSchema(updateDirecionamentoSchema), new UpdateDirecionamentoController().handle);
+router.put("/direcionamentos/:id/itens", isAuthenticated, validateSchema(updateDirecionamentoItemsSchema), new EditDirecionamentoItemsController().handle);
 router.put("/direcionamentos/:id/status", isAuthenticated, validateSchema(updateDirecionamentoStatusSchema), new UpdateDirecionamentoStatusController().handle);
 router.put("/direcionamentos/:id/skuPrice", isAuthenticated, validateSchema(updateDirecionamentoSkuPriceSchema), new UpdateDirecionamentoSkuPriceController().handle);
 router.delete("/direcionamentos/:id", isAuthenticated, isAdmin, new DeleteDirecionamentoController().handle);

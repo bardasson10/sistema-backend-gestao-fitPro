@@ -1,5 +1,6 @@
 import {
     ICreateDirecionamentoRequest,
+    IEditDirecionamentoItemsRequest,
     IUpdateDirecionamentoRequest,
     IUpdateDirecionamentoStatusRequest,
     IUpdateDirecionamentoSkuPriceRequest
@@ -106,6 +107,7 @@ const direcionamentoListSelect = {
             valorFaccaoPorPeca: true,
             estoqueCorte: {
                 select: {
+                    id: true,
                     produto: {
                         select: {
                             id: true,
@@ -158,6 +160,7 @@ function mapDirecionamentoParaListagem(direcionamento: any) {
             valorFaccaoPorPeca: toNumber(item.valorFaccaoPorPeca),
             valorEstimadoItem: item.quantidade * (toNumber(item.valorFaccaoPorPeca) ?? 0),
             id: item.id,
+            estoqueCorteId: item.estoqueCorte.id,
             quantidade: item.quantidade,
             produto: {
                 id: item.estoqueCorte.produto.id,
@@ -187,6 +190,17 @@ function mapQuantidadeSolicitadaPorEstoque(direcionamentos: ICreateDirecionament
             const atual = quantidadePorEstoque.get(item.estoqueCorteId) ?? 0;
             quantidadePorEstoque.set(item.estoqueCorteId, atual + item.quantidade);
         }
+    }
+
+    return quantidadePorEstoque;
+}
+
+function mapQuantidadePorItens(items: Array<{ estoqueCorteId: string; quantidade: number }>) {
+    const quantidadePorEstoque = new Map<string, number>();
+
+    for (const item of items) {
+        const atual = quantidadePorEstoque.get(item.estoqueCorteId) ?? 0;
+        quantidadePorEstoque.set(item.estoqueCorteId, atual + item.quantidade);
     }
 
     return quantidadePorEstoque;
@@ -557,6 +571,188 @@ class UpdateDirecionamentoService {
     }
 }
 
+class EditDirecionamentoItemsService {
+    async execute(id: string, { itensAdicionar, itensRemover }: IEditDirecionamentoItemsRequest) {
+        const adicionar = itensAdicionar ?? [];
+        const remover = itensRemover ?? [];
+
+        if (adicionar.length === 0 && remover.length === 0) {
+            throw new Error("Informe ao menos um item para adicionar ou remover.");
+        }
+
+        for (const item of [...adicionar, ...remover]) {
+            if (item.quantidade <= 0) {
+                throw new Error("Quantidade deve ser maior que 0 para editar itens da remessa.");
+            }
+        }
+
+        const direcionamento = await prismaClient.direcionamento.findUnique({
+            where: { id },
+            include: {
+                items: true
+            }
+        });
+
+        if (!direcionamento) {
+            throw new Error("Direcionamento nao encontrado.");
+        }
+
+        if (direcionamento.status !== "separado") {
+            throw new Error("A remessa so pode ser editada enquanto estiver com status 'separado'.");
+        }
+
+        const estoqueCorteIdPorDirecionamentoItemId = new Map(
+            direcionamento.items.map((item) => [item.id, item.estoqueCorteId])
+        );
+
+        const removerNormalizado = remover.map((item) => ({
+            ...item,
+            estoqueCorteId: estoqueCorteIdPorDirecionamentoItemId.get(item.estoqueCorteId) ?? item.estoqueCorteId
+        }));
+
+        const quantidadeAtual = mapQuantidadePorItens(direcionamento.items);
+        const quantidadeAdicionar = mapQuantidadePorItens(adicionar);
+        const quantidadeRemover = mapQuantidadePorItens(removerNormalizado);
+
+        for (const [estoqueCorteId, quantidade] of quantidadeRemover.entries()) {
+            const quantidadeExistente = quantidadeAtual.get(estoqueCorteId) ?? 0;
+
+            if (quantidadeExistente === 0) {
+                throw new Error(`O item ${estoqueCorteId} nao pertence a esta remessa.`);
+            }
+
+            if (quantidade > quantidadeExistente) {
+                throw new Error(`Nao e possivel remover ${quantidade} do item ${estoqueCorteId}. Quantidade atual na remessa: ${quantidadeExistente}.`);
+            }
+        }
+
+        const todosEstoqueIds = [...new Set([
+            ...quantidadeAtual.keys(),
+            ...quantidadeAdicionar.keys(),
+            ...quantidadeRemover.keys()
+        ])];
+
+        const quantidadeFinal = new Map<string, number>();
+
+        for (const estoqueId of todosEstoqueIds) {
+            const atual = quantidadeAtual.get(estoqueId) ?? 0;
+            const add = quantidadeAdicionar.get(estoqueId) ?? 0;
+            const remove = quantidadeRemover.get(estoqueId) ?? 0;
+            const total = atual + add - remove;
+
+            if (total < 0) {
+                throw new Error(`A quantidade final do item ${estoqueId} nao pode ser negativa.`);
+            }
+
+            if (total > 0) {
+                quantidadeFinal.set(estoqueId, total);
+            }
+        }
+
+        if (quantidadeFinal.size === 0) {
+            throw new Error("A remessa deve possuir ao menos um item apos a edicao.");
+        }
+
+        const estoques = await prismaClient.estoqueCorte.findMany({
+            where: { id: { in: todosEstoqueIds } },
+            include: {
+                lote: {
+                    select: {
+                        id: true,
+                        status: true
+                    }
+                }
+            }
+        });
+
+        if (estoques.length !== todosEstoqueIds.length) {
+            throw new Error("Um ou mais itens de estoque de corte nao foram encontrados.");
+        }
+
+        const estoquePorId = new Map(estoques.map((estoque) => [estoque.id, estoque]));
+        const diferencas = new Map<string, number>();
+
+        for (const estoqueId of todosEstoqueIds) {
+            const add = quantidadeAdicionar.get(estoqueId) ?? 0;
+            const remove = quantidadeRemover.get(estoqueId) ?? 0;
+            const diferenca = add - remove;
+            diferencas.set(estoqueId, diferenca);
+
+            const estoque = estoquePorId.get(estoqueId);
+            if (!estoque) {
+                throw new Error("Item de estoque de corte nao encontrado.");
+            }
+
+            if (add > 0 && estoque.lote.status !== "cortado") {
+                throw new Error(`Nao e permitido adicionar itens de lote ainda nao cortado. Lote ${estoque.lote.id} com status '${estoque.lote.status}'.`);
+            }
+
+            if (diferenca > 0 && diferenca > estoque.quantidadeDisponivel) {
+                throw new Error(`Estoque insuficiente para o item ${estoqueId}. Disponivel: ${estoque.quantidadeDisponivel}.`);
+            }
+        }
+
+        const direcionamentoAtualizado = await prismaClient.$transaction(async (tx) => {
+            for (const [estoqueCorteId, diferenca] of diferencas.entries()) {
+                if (diferenca === 0) {
+                    continue;
+                }
+
+                if (diferenca > 0) {
+                    const resultado = await tx.estoqueCorte.updateMany({
+                        where: {
+                            id: estoqueCorteId,
+                            quantidadeDisponivel: {
+                                gte: diferenca
+                            }
+                        },
+                        data: {
+                            quantidadeDisponivel: {
+                                decrement: diferenca
+                            }
+                        }
+                    });
+
+                    if (resultado.count !== 1) {
+                        throw new Error(`Saldo insuficiente para o item ${estoqueCorteId} durante a edicao da remessa.`);
+                    }
+                } else {
+                    await tx.estoqueCorte.update({
+                        where: { id: estoqueCorteId },
+                        data: {
+                            quantidadeDisponivel: {
+                                increment: Math.abs(diferenca)
+                            }
+                        }
+                    });
+                }
+            }
+
+            const quantidadeTotal = Array.from(quantidadeFinal.values()).reduce((sum, quantidade) => sum + quantidade, 0);
+
+            return tx.direcionamento.update({
+                where: { id },
+                data: {
+                    quantidade: quantidadeTotal,
+                    items: {
+                        deleteMany: {},
+                        create: Array.from(quantidadeFinal.entries()).map(([estoqueCorteId, quantidade]) => ({
+                            estoqueCorteId,
+                            quantidade
+                        }))
+                    }
+                },
+                include: direcionamentoInclude
+            });
+        }, {
+            maxWait: 10000,
+            timeout: 30000
+        });
+
+        return direcionamentoAtualizado;
+    }
+}
+
 class UpdateDirecionamentoStatusService {
     async execute(id: string, { status }: IUpdateDirecionamentoStatusRequest) {
         const direcionamento = await prismaClient.direcionamento.findUnique({
@@ -800,6 +996,7 @@ export {
     ListAllDirecionamentoService,
     ListByIdDirecionamentoService,
     UpdateDirecionamentoService,
+    EditDirecionamentoItemsService,
     UpdateDirecionamentoStatusService,
     UpdateDirecionamentoSkuPriceService,
     DeleteDirecionamentoService
