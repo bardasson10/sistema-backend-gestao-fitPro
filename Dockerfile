@@ -1,22 +1,16 @@
-FROM node:20-alpine
-
-
-RUN apk add --no-cache libc6-compat
+FROM node:20
 
 WORKDIR /app
 
-COPY package.json yarn.lock* ./
+RUN corepack enable
 
+COPY package.json yarn.lock ./
 
 RUN yarn install
 
-
 COPY . .
 
-
 RUN yarn prisma generate
-
-
 RUN yarn build
 
 EXPOSE 3333
