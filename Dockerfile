@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN corepack enable
 
-ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres?schema=public
+ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}
 
 COPY package.json yarn.lock ./
