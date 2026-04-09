@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Instala dependências básicas do sistema (necessárias para alguns pacotes node e prisma)
 RUN apk add --no-cache libc6-compat
