@@ -3,6 +3,7 @@ FROM node:24-bookworm-slim
 WORKDIR /app
 
 RUN corepack enable
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}
