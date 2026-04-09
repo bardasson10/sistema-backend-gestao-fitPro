@@ -39,11 +39,15 @@ export const swaggerSpec = generator.generateDocument({
     servers: [
         {
             url: 'http://localhost:3333',
-            description: 'Servidor de Desenvolvimento'
+            description: 'local development server'
         },
         {
             url: 'https://sistema-backend-gestao-fitpro.onrender.com',
-            description: 'Servidor de Produção'
+            description: 'development server'
+        },
+        {
+            url: 'https://bienjoli.tech',
+            description: 'production server'
         }
     ],
     tags: [
