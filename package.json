@@ -16,7 +16,7 @@
   "author": "Bardasson <121575366+bardasson10@users.noreply.github.com>",
   "license": "MIT",
   "engines": {
-    "node": "24.x"
+    "node": ">=20"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.4.0",
