@@ -1,7 +1,0 @@
-services:
-  sistema-backend-gestao-fitpro: # Removido o hífen e transformado em chave
-    type: web
-    env: node
-    plan: free
-    buildCommand: "yarn install && yarn prisma generate && yarn build"
-    startCommand: "yarn start"

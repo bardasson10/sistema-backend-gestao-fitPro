@@ -1,0 +1,24 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copia os arquivos de dependências
+COPY package.json yarn.lock* ./
+
+# Instala as dependências
+RUN yarn install --frozen-lockfile
+
+# Copia o resto do código e o Prisma
+COPY . .
+
+# Gera o cliente do Prisma
+RUN yarn prisma generate
+
+# Faz o build do projeto
+RUN yarn build
+
+# Expõe a porta (ajuste se não for 3000)
+EXPOSE 3000
+
+# Comando para iniciar
+CMD ["yarn", "start"]
