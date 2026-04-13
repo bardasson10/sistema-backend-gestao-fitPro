@@ -3,6 +3,6 @@ services:
     name: sistema-backend-gestao-fitpro
     env: node
     plan: free
-    buildCommand: yarn --frozen-lockfile install && yarn prisma generate && yarn build
-    startCommand: yarn start
+    buildCommand: yarn --frozen-lockfile install && yarn prisma generate && yarn build && yarn db:migrate:deploy
+    startCommand: NODE_OPTIONS=--use-system-ca yarn start:prod
     autoDeploy: true

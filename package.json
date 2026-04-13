@@ -5,8 +5,10 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx src/server.ts",
+    "start:prod": "prisma migrate deploy && yarn start",
     "dev": "tsx watch src/server.ts",
     "postinstall": "prisma generate",
+    "db:migrate:deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts"
   },
   "prisma": {
