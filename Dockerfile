@@ -11,6 +11,8 @@ ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}
 
 COPY package.json yarn.lock ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 
 RUN yarn install
 COPY . .
