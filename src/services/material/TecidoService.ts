@@ -58,15 +58,42 @@ class CreateTecidoService {
 }
 
 class ListAllTecidoService {
-    async execute(fornecedorId?: string, corId?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
+    async execute({ fornecedorId, corId, nome, codigoReferencia, gramatura, page, limit }: {
+        fornecedorId?: string;
+        corId?: string;
+        nome?: string;
+        codigoReferencia?: string;
+        gramatura?: string;
+        page?: number | string;
+        limit?: number | string;
+    }): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+
+        const gramaturaNumber = gramatura ? Number(gramatura) : undefined;
+
+        const where = {
+            ...(fornecedorId && { fornecedorId }),
+            ...(corId && { corId }),
+            ...(nome && {
+                nome: {
+                    contains: nome,
+                    mode: 'insensitive' as const
+                }
+            }),
+            ...(codigoReferencia && {
+                codigoReferencia: {
+                    contains: codigoReferencia,
+                    mode: 'insensitive' as const
+                }
+            }),
+            ...(gramaturaNumber !== undefined && !Number.isNaN(gramaturaNumber) && {
+                gramatura: gramaturaNumber
+            })
+        };
 
         const [tecidos, total] = await Promise.all([
             prismaClient.tecido.findMany({
-                where: {
-                    ...(fornecedorId && { fornecedorId }),
-                    ...(corId && { corId })
-                },
+                where,
                 include: {
                     fornecedor: true,
                     cor: true,
@@ -80,10 +107,7 @@ class ListAllTecidoService {
                 }
             }),
             prismaClient.tecido.count({
-                where: {
-                    ...(fornecedorId && { fornecedorId }),
-                    ...(corId && { corId })
-                }
+                where
             })
         ]);
 

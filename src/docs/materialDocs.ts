@@ -454,6 +454,17 @@ export function registerMaterialRoutes(registry: OpenAPIRegistry) {
         path: '/tecidos',
         tags: ['Materiais'],
         summary: 'Listar tecidos',
+        request: {
+            query: z.object({
+                fornecedorId: z.string().uuid().optional(),
+                corId: z.string().uuid().optional(),
+                nome: z.string().optional(),
+                codigoReferencia: z.string().optional(),
+                gramatura: z.coerce.number().optional(),
+                page: z.coerce.number().optional(),
+                limit: z.coerce.number().optional(),
+            })
+        },
         security: [{ bearerAuth: [] }],
         responses: {
             200: {

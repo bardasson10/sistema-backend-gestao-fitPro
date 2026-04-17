@@ -20,8 +20,16 @@ class CreateTecidoController {
 
 class ListAllTecidoController {
     async handle(req: Request, res: Response) {
-        const { fornecedorId, corId, page, limit } = req.query;
-        const tecidos = await new ListAllTecidoService().execute(fornecedorId as string, corId as string, page as string | number | undefined, limit as string | number | undefined);
+        const { fornecedorId, corId, nome, codigoReferencia, gramatura, page, limit } = req.query;
+        const tecidos = await new ListAllTecidoService().execute({
+            fornecedorId: fornecedorId as string,
+            corId: corId as string,
+            nome: nome as string,
+            codigoReferencia: codigoReferencia as string,
+            gramatura: gramatura as string,
+            page: page as string | number | undefined,
+            limit: limit as string | number | undefined
+        });
         return res.json(tecidos);
     }
 }
