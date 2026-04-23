@@ -3,12 +3,11 @@ import { CreateEstoqueRoloService, ListAllEstoqueRoloService, ListByIdEstoqueRol
 
 class CreateEstoqueRoloController {
     async handle(req: Request, res: Response) {
-        const { tecidoId, prefixo, dataLote, rolos, situacao } = req.body;
+        const { tecidoId, dataLote, rolos, situacao } = req.body;
         const usuarioId = req.userId; // Pega o ID do usuário autenticado
         
         const resultado = await new CreateEstoqueRoloService().execute({
             tecidoId,
-            prefixo,
             dataLote,
             rolos,
             situacao,

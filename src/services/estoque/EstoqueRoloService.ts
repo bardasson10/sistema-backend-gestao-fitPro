@@ -6,6 +6,32 @@ function decimalToNumber(value: { toString: () => string } | null | undefined): 
     return value ? parseFloat(value.toString()) : 0;
 }
 
+const colorAbbreviations: Record<string, string> = {
+    "Verde": "VRD",
+    "Preto": "PRT",
+    "pink": "PNK",
+    "Marrom": "MRM",
+    "Branco": "BRC",
+    "Azul marinho": "MRN"
+};
+
+const fabricAbbreviations: Record<string, string> = {
+    "Suplex zero transparência": "SZT",
+    "Suplex búzios": "SBZ",
+    "Suplex blackout premium": "SBP"
+};
+
+function getColorAbbreviation(colorName: string): string {
+    return colorAbbreviations[colorName] || colorName.slice(0, 3).toUpperCase();
+}
+
+function getFabricCode(tecidoNome: string, codigoReferencia?: string | null): string {
+    if (codigoReferencia) {
+        return codigoReferencia;
+    }
+    return fabricAbbreviations[tecidoNome] || tecidoNome.slice(0, 3).toUpperCase();
+}
+
 function formatarDataLoteParaCodigo(dataLote: string): string {
     const match = dataLote.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
@@ -39,20 +65,22 @@ function formatarDataLoteParaCodigo(dataLote: string): string {
 }
 
 class CreateEstoqueRoloService {
-    async execute({ tecidoId, prefixo, dataLote, rolos, situacao, usuarioId }: ICreateEstoqueRoloRequest) {
+    async execute({ tecidoId, dataLote, rolos, situacao, usuarioId }: ICreateEstoqueRoloRequest) {
         return prismaClient.$transaction(async (tx) => {
             // Verificar se tecido existe
             const tecido = await tx.tecido.findUnique({
-                where: { id: tecidoId }
+                where: { id: tecidoId },
+                include: { cor: true }
             });
 
             if (!tecido) {
                 throw new Error("Tecido não encontrado.");
             }
 
-            const prefixoFormatado = prefixo.trim().toUpperCase();
+            const fabricCode = getFabricCode(tecido.nome, tecido.codigoReferencia);
+            const colorAbbrev = getColorAbbreviation(tecido.cor?.nome || "");
             const dataLoteCodigo = formatarDataLoteParaCodigo(dataLote);
-            const baseCodigo = `${prefixoFormatado}-${dataLoteCodigo}`;
+            const baseCodigo = `${fabricCode}-${colorAbbrev}-${dataLoteCodigo}`;
 
             const codigosExistentes = await tx.estoqueRolo.findMany({
                 where: {
@@ -541,11 +569,10 @@ class GetResumoEstoqueRolosService {
                 where: {
                     ...(estoqueRoloId && { estoqueRoloId }),
                     ...(filtroMovimentacao),
-                    ...((tecidoId || situacao || fornecedorId) && {
+                    ...((tecidoId || fornecedorId) && {
                         rolo: {
                             is: {
                                 ...(tecidoId && { tecidoId }),
-                                ...(situacao && { situacao }),
                                 ...(fornecedorId && {
                                     tecido: {
                                         is: {

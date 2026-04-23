@@ -3,11 +3,6 @@ import { z } from "zod";
 export const createEstoqueRoloSchema = z.object({
     body: z.object({
         tecidoId: z.uuid("ID de tecido inválido"),
-        prefixo: z.string()
-            .trim()
-            .min(2, "Prefixo deve ter pelo menos 2 caracteres")
-            .max(10, "Prefixo deve ter no máximo 10 caracteres")
-            .regex(/^[A-Za-z0-9]+$/, "Prefixo deve conter apenas letras e números"),
         dataLote: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data do lote deve estar no formato YYYY-MM-DD"),
         rolos: z.array(
             z.object({

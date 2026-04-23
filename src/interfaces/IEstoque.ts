@@ -5,7 +5,6 @@ export interface ICreateEstoqueRoloItemRequest {
 
 export interface ICreateEstoqueRoloRequest {
     tecidoId: string;
-    prefixo: string;
     dataLote: string;
     rolos: ICreateEstoqueRoloItemRequest[];
     situacao?: string;

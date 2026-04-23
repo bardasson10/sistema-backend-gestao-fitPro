@@ -89,7 +89,6 @@ curl -X POST http://localhost:3333/estoque-rolos \
   -H "Content-Type: application/json" \
   -d '{
     "tecidoId":"uuid-tecido",
-    "prefixo":"SPP",
     "dataLote":"2026-03-11",
     "rolos":[
       {"pesoInicialKg":25.50},

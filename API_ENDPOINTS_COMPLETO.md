@@ -404,7 +404,6 @@ Content-Type: application/json
 
 {
   "tecidoId": "uuid-tecido",
-  "prefixo": "SPP",
   "dataLote": "2026-03-11",
   "rolos": [
     { "pesoInicialKg": 25.50 },
@@ -953,7 +952,7 @@ Authorization: Bearer <token>
    POST /tecidos { fornecedorId, corId, nome, ... }
 
 8. Criar Estoque de Rolo
-  POST /estoque-rolos { tecidoId, prefixo, dataLote, rolos: [{ pesoInicialKg }], ... }
+  POST /estoque-rolos { tecidoId, dataLote, rolos: [{ pesoInicialKg }], ... }
 
 9. Registrar Movimentação (saída para produção)
    POST /movimentacoes-estoque { estoqueRoloId, tipoMovimentacao: "saida", ... }
