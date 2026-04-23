@@ -6,30 +6,28 @@ function decimalToNumber(value: { toString: () => string } | null | undefined): 
     return value ? parseFloat(value.toString()) : 0;
 }
 
-const colorAbbreviations: Record<string, string> = {
-    "Verde": "VRD",
-    "Preto": "PRT",
-    "pink": "PNK",
-    "Marrom": "MRM",
-    "Branco": "BRC",
-    "Azul marinho": "MRN"
-};
-
-const fabricAbbreviations: Record<string, string> = {
-    "Suplex zero transparência": "SZT",
-    "Suplex búzios": "SBZ",
-    "Suplex blackout premium": "SBP"
-};
-
 function getColorAbbreviation(colorName: string): string {
     return colorName.toUpperCase();
 }
 
+function getFabricInitials(tecidoNome: string): string {
+    const palavras = tecidoNome
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (palavras.length === 0) {
+        return "TEC";
+    }
+
+    return palavras.map((palavra) => palavra[0]).join("").toUpperCase();
+}
+
 function getFabricCode(tecidoNome: string, codigoReferencia?: string | null): string {
     if (codigoReferencia) {
-        return codigoReferencia;
+        return codigoReferencia.trim().toUpperCase();
     }
-    return fabricAbbreviations[tecidoNome] || tecidoNome.slice(0, 3).toUpperCase();
+    return getFabricInitials(tecidoNome);
 }
 
 function formatarDataLoteParaCodigo(dataLote: string): string {
