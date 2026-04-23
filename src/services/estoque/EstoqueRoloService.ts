@@ -22,7 +22,7 @@ const fabricAbbreviations: Record<string, string> = {
 };
 
 function getColorAbbreviation(colorName: string): string {
-    return colorAbbreviations[colorName] || colorName.slice(0, 3).toUpperCase();
+    return colorName.toUpperCase();
 }
 
 function getFabricCode(tecidoNome: string, codigoReferencia?: string | null): string {
