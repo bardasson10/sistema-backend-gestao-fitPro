@@ -2,6 +2,10 @@ import { ICreateEstoqueRoloRequest, IUpdateEstoqueRoloRequest } from "../../inte
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
+function decimalToNumber(value: { toString: () => string } | null | undefined): number {
+    return value ? parseFloat(value.toString()) : 0;
+}
+
 function formatarDataLoteParaCodigo(dataLote: string): string {
     const match = dataLote.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
@@ -347,23 +351,37 @@ class UpdateEstoqueRoloService {
 
 class DeleteEstoqueRoloService {
     async execute(id: string) {
-        const rolo = await prismaClient.estoqueRolo.findUnique({
-            where: { id },
-            include: {
-                movimentacoes: true
+        await prismaClient.$transaction(async (tx) => {
+            const rolo = await tx.estoqueRolo.findUnique({
+                where: { id },
+                include: {
+                    movimentacoes: true
+                }
+            });
+
+            if (!rolo) {
+                throw new Error("Rolo não encontrado.");
             }
-        });
 
-        if (!rolo) {
-            throw new Error("Rolo não encontrado.");
-        }
+            const temMovimentacaoNaoEntrada = rolo.movimentacoes.some(
+                (mov) => mov.tipoMovimentacao !== "entrada"
+            );
 
-        if (rolo.movimentacoes.length > 0) {
-            throw new Error("Não é possível deletar um rolo que possui movimentações associadas.");
-        }
+            if (temMovimentacaoNaoEntrada) {
+                throw new Error("Não é possível deletar um rolo que possui movimentações de saída/ajuste/devolução.");
+            }
 
-        await prismaClient.estoqueRolo.delete({
-            where: { id }
+            if (rolo.movimentacoes.length > 0) {
+                await tx.movimentacaoEstoque.deleteMany({
+                    where: {
+                        estoqueRoloId: id
+                    }
+                });
+            }
+
+            await tx.estoqueRolo.delete({
+                where: { id }
+            });
         });
 
         return { message: "Rolo deletado com sucesso." };
@@ -432,16 +450,34 @@ class GetRelatorioEstoqueService {
                         }
                     }
                 })
+            },
+            include: {
+                rolo: {
+                    include: {
+                        tecido: {
+                            select: {
+                                valorPorKg: true
+                            }
+                        }
+                    }
+                }
             }
         });
 
         const totalRolos = rolos.length;
-        const pesoTotal = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; }) => acc + parseFloat(rolo.pesoAtualKg.toString()), 0);
+        const pesoTotalEstoque = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; }) => acc + parseFloat(rolo.pesoAtualKg.toString()), 0);
         const valorTotalEstoque = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; tecido: { valorPorKg: { toString: () => string; } | null; }; }) => {
             const pesoAtualKg = parseFloat(rolo.pesoAtualKg.toString());
             const valorPorKg = rolo.tecido?.valorPorKg ? parseFloat(rolo.tecido.valorPorKg.toString()) : 0;
             return acc + (pesoAtualKg * valorPorKg);
         }, 0);
+        const pesoTotalMovimentado = movimentacoes.reduce((acc: number, mov: any) => acc + decimalToNumber(mov.pesoMovimentado), 0);
+        const valorTotalMovimentado = movimentacoes.reduce((acc: number, mov: any) => {
+            const pesoMovimentado = decimalToNumber(mov.pesoMovimentado);
+            const valorPorKg = decimalToNumber(mov.rolo?.tecido?.valorPorKg);
+            return acc + (pesoMovimentado * valorPorKg);
+        }, 0);
+        const usarTotaisMovimentacaoSaida = tipoMovimentacao === "saida";
         const rolosDisponiveis = rolos.filter((r: { situacao: string; }) => r.situacao === "disponivel").length;
         const rolosReservados = rolos.filter((r: { situacao: string; }) => r.situacao === "reservado").length;
         const rolosEmUso = rolos.filter((r: { situacao: string; }) => r.situacao === "em_uso").length;
@@ -464,8 +500,8 @@ class GetRelatorioEstoqueService {
 
         return {
             totalRolos,
-            pesoTotal: parseFloat(pesoTotal.toFixed(3)),
-            valorTotalEstoque: parseFloat(valorTotalEstoque.toFixed(2)),
+            pesoTotal: parseFloat((usarTotaisMovimentacaoSaida ? pesoTotalMovimentado : pesoTotalEstoque).toFixed(3)),
+            valorTotalEstoque: parseFloat((usarTotaisMovimentacaoSaida ? valorTotalMovimentado : valorTotalEstoque).toFixed(2)),
             tecidoComMaiorEstoque,
             rolosDisponiveis,
             rolosReservados,
@@ -488,6 +524,7 @@ class GetResumoEstoqueRolosService {
         dataFim?: string
     ): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+        const resumoMovimentacaoSaida = tipoMovimentacao === "saida";
 
         const filtroMovimentacao = {
             ...(tipoMovimentacao && { tipoMovimentacao }),
@@ -498,6 +535,96 @@ class GetResumoEstoqueRolosService {
                 }
             } : {})
         };
+
+        if (resumoMovimentacaoSaida) {
+            const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
+                where: {
+                    ...(estoqueRoloId && { estoqueRoloId }),
+                    ...(filtroMovimentacao),
+                    ...((tecidoId || situacao || fornecedorId) && {
+                        rolo: {
+                            is: {
+                                ...(tecidoId && { tecidoId }),
+                                ...(situacao && { situacao }),
+                                ...(fornecedorId && {
+                                    tecido: {
+                                        is: {
+                                            fornecedorId
+                                        }
+                                    }
+                                })
+                            }
+                        }
+                    })
+                },
+                include: {
+                    rolo: {
+                        include: {
+                            tecido: {
+                                include: {
+                                    cor: true
+                                }
+                            }
+                        }
+                    }
+                },
+                orderBy: {
+                    createdAt: "desc"
+                }
+            });
+
+            const resumoPorTecido = movimentacoes.reduce((acc: any, mov: any) => {
+                const rolo = mov.rolo;
+                const tecido = rolo?.tecido;
+                if (!rolo || !tecido) {
+                    return acc;
+                }
+
+                const tecidoIdAtual = rolo.tecidoId;
+
+                if (!acc[tecidoIdAtual]) {
+                    acc[tecidoIdAtual] = {
+                        tecidoId: tecidoIdAtual,
+                        tecido,
+                        rolosUnicos: new Set<string>(),
+                        pesoTotalRolos: 0,
+                        valorTotalRolos: 0
+                    };
+                }
+
+                const pesoMovimentado = decimalToNumber(mov.pesoMovimentado);
+                const valorPorKg = decimalToNumber(tecido.valorPorKg);
+
+                acc[tecidoIdAtual].rolosUnicos.add(rolo.id);
+                acc[tecidoIdAtual].pesoTotalRolos += pesoMovimentado;
+                acc[tecidoIdAtual].valorTotalRolos += pesoMovimentado * valorPorKg;
+
+                return acc;
+            }, {});
+
+            const resumoArray = Object.values(resumoPorTecido).map((item: any) => ({
+                qtdTotalRolos: item.rolosUnicos.size,
+                pesoTotalRolos: parseFloat(item.pesoTotalRolos.toFixed(3)),
+                valorTotalRolos: parseFloat(item.valorTotalRolos.toFixed(2)),
+                tecido: {
+                    id: item.tecido.id,
+                    nome: item.tecido.nome,
+                    codigoReferencia: item.tecido.codigoReferencia,
+                    cor: {
+                        id: item.tecido.cor?.id,
+                        nome: item.tecido.cor?.nome,
+                        codigoHex: item.tecido.cor?.codigoHex
+                    }
+                }
+            }));
+
+            const totalItems = resumoArray.length;
+            const paginatedData = resumoArray.slice(skip, skip + pageLimit);
+
+            const response = createPaginatedResponse(paginatedData, totalItems, pageNumber, pageLimit) as any;
+            response.pagination.totalPages = response.pagination.pages;
+            return response;
+        }
 
         const rolos = await prismaClient.estoqueRolo.findMany({
             where: {
@@ -544,8 +671,8 @@ class GetResumoEstoqueRolosService {
                 };
             }
 
-            const pesoAtualKg = rolo.pesoAtualKg ? parseFloat(rolo.pesoAtualKg.toString()) : 0;
-            const valorPorKg = rolo.tecido?.valorPorKg ? parseFloat(rolo.tecido.valorPorKg.toString()) : 0;
+            const pesoAtualKg = decimalToNumber(rolo.pesoAtualKg);
+            const valorPorKg = decimalToNumber(rolo.tecido?.valorPorKg);
 
             acc[tecidoId].qtdTotalRolos += 1;
             acc[tecidoId].pesoTotalRolos += pesoAtualKg;
