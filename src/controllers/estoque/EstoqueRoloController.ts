@@ -86,13 +86,12 @@ class GetRelatorioEstoqueController {
 
 class GetResumoEstoqueRolosController {
     async handle(req: Request, res: Response) {
-        const { fornecedorId, tecidoId, page, limit, situacao, estoqueRoloId, tipoMovimentacao, dataInicio, dataFim } = req.query;
+        const { fornecedorId, tecidoId, page, limit, estoqueRoloId, tipoMovimentacao, dataInicio, dataFim } = req.query;
         const resumo = await new GetResumoEstoqueRolosService().execute(
             fornecedorId as string,
             tecidoId as string,
             page as string | number | undefined,
             limit as string | number | undefined,
-            situacao as string,
             estoqueRoloId as string,
             tipoMovimentacao as string,
             dataInicio as string,

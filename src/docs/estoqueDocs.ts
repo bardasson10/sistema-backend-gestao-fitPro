@@ -497,17 +497,16 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         }
     });
 
-    // GET /estoque-rolos/resumo - Resumo de estoque agrupado por tecido
+    // GET /estoque-rolos/resumo - Resumo de movimentações de estoque agrupado por tecido
     registry.registerPath({
         method: 'get',
         path: '/estoque-rolos/resumo',
         tags: ['Estoque'],
-        summary: 'Resumo de estoque agrupado por tecido',
+        summary: 'Resumo de movimentações de estoque agrupado por tecido (padrão: entrada)',
         security: [{ bearerAuth: [] }],
         request: {
             query: z.object({
                 tecidoId: z.uuid().optional(),
-                situacao: z.enum(['disponivel', 'reservado', 'em_uso', 'descartado']).optional(),
                 estoqueRoloId: z.uuid().optional(),
                 fornecedorId: z.uuid().optional(),
                 tipoMovimentacao: z.enum(['entrada', 'saida', 'ajuste', 'devolucao']).optional(),
