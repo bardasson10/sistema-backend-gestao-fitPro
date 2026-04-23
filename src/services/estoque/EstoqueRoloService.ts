@@ -30,6 +30,22 @@ function getFabricCode(tecidoNome: string, codigoReferencia?: string | null): st
     return getFabricInitials(tecidoNome);
 }
 
+function buildBaseCodigo(fabricCode: string, colorCode: string, dataLoteCodigo: string): string {
+    const fabricParts = fabricCode
+        .split("-")
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+    const lastPart = fabricParts[fabricParts.length - 1];
+    const corJaNoCodigo = lastPart === colorCode;
+
+    if (corJaNoCodigo) {
+        return `${fabricCode}-${dataLoteCodigo}`;
+    }
+
+    return `${fabricCode}-${colorCode}-${dataLoteCodigo}`;
+}
+
 function formatarDataLoteParaCodigo(dataLote: string): string {
     const match = dataLote.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
@@ -78,7 +94,7 @@ class CreateEstoqueRoloService {
             const fabricCode = getFabricCode(tecido.nome, tecido.codigoReferencia);
             const colorAbbrev = getColorAbbreviation(tecido.cor?.nome || "");
             const dataLoteCodigo = formatarDataLoteParaCodigo(dataLote);
-            const baseCodigo = `${fabricCode}-${colorAbbrev}-${dataLoteCodigo}`;
+            const baseCodigo = buildBaseCodigo(fabricCode, colorAbbrev, dataLoteCodigo);
 
             const codigosExistentes = await tx.estoqueRolo.findMany({
                 where: {
