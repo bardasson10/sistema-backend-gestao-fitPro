@@ -107,6 +107,17 @@ export const createDirecionamentoSchema = z.object({
     }),
 });
 
+export const createDirecionamentoInternoSchema = z.object({
+    body: z.object({
+        tipoServico: z.enum(["costura", "corte"]),
+        observacao: z.string().optional(),
+        items: z.array(z.object({
+            estoqueCorteId: z.uuid("ID de estoque de corte inválido"),
+            quantidade: z.number().int().positive("Quantidade deve ser maior que zero"),
+        })).min(1, "Informe ao menos um item para produção interna."),
+    }),
+});
+
 export const updateDirecionamentoSchema = z.object({
     body: z.object({
         direcionamentos: z.array(z.object({
@@ -236,6 +247,12 @@ export const listConferenciaSchema = z.object({
         limit: z.coerce.number().int().positive().optional(),
         statusQualidade: z.enum(["recebido", "em_conferencia", "aprovado", "aprovado_parcial", "aprovado_defeito"]).optional(),
         liberadoPagamento: z.coerce.boolean().optional(),
+        isProducaoInterna: z.coerce.boolean().optional(),
+        direcionamentoId: z.uuid("ID de direcionamento inválido").optional(),
+        faccaoId: z.uuid("ID de facção inválido").optional(),
+        responsavelId: z.uuid("ID de responsável inválido").optional(),
+        dataInicio: z.string().optional(),
+        dataFim: z.string().optional(),
     }).optional(),
 });
 

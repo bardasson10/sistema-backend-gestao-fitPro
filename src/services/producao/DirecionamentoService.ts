@@ -1,5 +1,6 @@
 import {
     ICreateDirecionamentoRequest,
+    ICreateDirecionamentoInternoRequest,
     IEditDirecionamentoItemsRequest,
     IUpdateDirecionamentoRequest,
     IUpdateDirecionamentoStatusRequest,
@@ -9,6 +10,7 @@ import { parsePaginationParams, PaginatedResponse } from "../../utils/pagination
 import prismaClient from "../../prisma";
 
 type QueryFilterValue = string | string[] | undefined;
+const NOME_FACCAO_PRODUCAO_INTERNA = "Produção Interna";
 
 function normalizarQueryParaArray(valor?: QueryFilterValue) {
     if (!valor) {
@@ -991,8 +993,164 @@ class DeleteDirecionamentoService {
     }
 }
 
+class CreateDirecionamentoInternoService {
+    async execute({ tipoServico, items, observacao }: ICreateDirecionamentoInternoRequest, usuarioId: string) {
+        if (!items?.length) {
+            throw new Error("Informe ao menos um item para produção interna.");
+        }
+
+        for (const item of items) {
+            if (item.quantidade <= 0) {
+                throw new Error("Quantidade de direcionamento deve ser maior que 0.");
+            }
+        }
+
+        const [faccaoInterna, responsavel] = await Promise.all([
+            prismaClient.faccao.findFirst({
+                where: {
+                    nome: NOME_FACCAO_PRODUCAO_INTERNA,
+                    status: "ativo"
+                },
+                select: {
+                    id: true
+                }
+            }),
+            prismaClient.usuario.findUnique({
+                where: { id: usuarioId },
+                select: { id: true }
+            })
+        ]);
+
+        if (!faccaoInterna) {
+            throw new Error("Facção 'Produção Interna' não encontrada ou inativa.");
+        }
+
+        if (!responsavel) {
+            throw new Error("Usuário responsável não encontrado.");
+        }
+
+        const quantidadePorEstoque = mapQuantidadePorItens(items);
+        const estoqueIds = Array.from(quantidadePorEstoque.keys());
+
+        const estoques = await prismaClient.estoqueCorte.findMany({
+            where: { id: { in: estoqueIds } },
+            include: {
+                lote: {
+                    select: {
+                        id: true,
+                        status: true
+                    }
+                }
+            }
+        });
+
+        if (estoques.length !== estoqueIds.length) {
+            throw new Error("Um ou mais itens de estoque de corte nao foram encontrados.");
+        }
+
+        const estoquePorId = new Map(estoques.map((estoque) => [estoque.id, estoque]));
+
+        for (const [estoqueCorteId, quantidadeSolicitada] of quantidadePorEstoque.entries()) {
+            const estoque = estoquePorId.get(estoqueCorteId);
+            if (!estoque) {
+                throw new Error("Item de estoque de corte nao encontrado.");
+            }
+
+            if (estoque.lote.status !== "cortado") {
+                throw new Error(`Nao e permitido enviar para remessa itens de lote ainda nao cortado. Lote ${estoque.lote.id} com status '${estoque.lote.status}'.`);
+            }
+
+            if (quantidadeSolicitada > estoque.quantidadeDisponivel) {
+                throw new Error(`Estoque insuficiente para o item ${estoqueCorteId}. Disponivel: ${estoque.quantidadeDisponivel}.`);
+            }
+        }
+
+        const resultado = await prismaClient.$transaction(async (tx) => {
+            for (const [estoqueCorteId, quantidadeSolicitada] of quantidadePorEstoque.entries()) {
+                const saldoAtualizado = await tx.estoqueCorte.updateMany({
+                    where: {
+                        id: estoqueCorteId,
+                        quantidadeDisponivel: {
+                            gte: quantidadeSolicitada
+                        }
+                    },
+                    data: {
+                        quantidadeDisponivel: {
+                            decrement: quantidadeSolicitada
+                        }
+                    }
+                });
+
+                if (saldoAtualizado.count !== 1) {
+                    throw new Error(`Saldo insuficiente para o item ${estoqueCorteId} durante a confirmacao da remessa.`);
+                }
+            }
+
+            const quantidadeTotal = items.reduce((sum, item) => sum + item.quantidade, 0);
+
+            const direcionamento = await tx.direcionamento.create({
+                data: {
+                    faccaoId: faccaoInterna.id,
+                    tipoServico,
+                    quantidade: quantidadeTotal,
+                    status: "entregue",
+                    dataSaida: new Date(),
+                    dataPrevisaoRetorno: new Date(),
+                    observacao,
+                    items: {
+                        create: items.map((item) => ({
+                            estoqueCorteId: item.estoqueCorteId,
+                            quantidade: item.quantidade
+                        }))
+                    }
+                },
+                include: direcionamentoInclude
+            });
+
+            const conferencia = await tx.conferencia.create({
+                data: {
+                    direcionamentoId: direcionamento.id,
+                    responsavelId: usuarioId,
+                    dataConferencia: new Date(),
+                    status: "aprovado",
+                    observacao: observacao ?? "Produção interna sem etapa de conferência manual.",
+                    liberadoPagamento: true,
+                    isProducaoInterna: true,
+                    items: {
+                        create: direcionamento.items.map((item) => ({
+                            direcionamentoItemId: item.id,
+                            qtdRecebida: item.quantidade,
+                            qtdDefeito: 0
+                        }))
+                    }
+                },
+                include: {
+                    responsavel: true,
+                    direcionamento: {
+                        include: {
+                            faccao: true
+                        }
+                    },
+                    items: true
+                }
+            });
+
+            return {
+                direcionamento,
+                conferencia
+            };
+        }, {
+            maxWait: 10000,
+            timeout: 30000
+        });
+
+        return resultado;
+    }
+}
+
 export {
     CreateDirecionamentoService,
+    CreateDirecionamentoInternoService,
     ListAllDirecionamentoService,
     ListByIdDirecionamentoService,
     UpdateDirecionamentoService,

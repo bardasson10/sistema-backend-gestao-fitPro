@@ -122,6 +122,12 @@ export interface ICreateDirecionamentoRequest {
     direcionamentos: IDirecionamentoInput[];
 }
 
+export interface ICreateDirecionamentoInternoRequest {
+    tipoServico: "costura" | "corte";
+    items: IDirecionamentoItemInput[];
+    observacao?: string;
+}
+
 export interface IUpdateDirecionamentoRequest {
     direcionamentos: IDirecionamentoInput[];
 }
@@ -199,6 +205,7 @@ export interface IConferenciaResponse {
     dataConferencia?: Date;
     observacao?: string;
     liberadoPagamento: boolean;
+    isProducaoInterna: boolean;
     statusQualidade?: "recebido" | "em_conferencia" | "aprovado" | "aprovado_parcial" | "aprovado_defeito";
     createdAt: Date;
     updatedAt: Date;

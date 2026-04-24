@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import {
     CreateDirecionamentoService,
+    CreateDirecionamentoInternoService,
     ListAllDirecionamentoService,
     ListByIdDirecionamentoService,
     UpdateDirecionamentoService,
@@ -18,6 +19,21 @@ class CreateDirecionamentoController {
             direcionamentos
         });
         return res.status(201).json(direcionamento);
+    }
+}
+
+class CreateDirecionamentoInternoController {
+    async handle(req: Request, res: Response) {
+        const { tipoServico, items, observacao } = req.body;
+        const usuarioId = req.userId;
+
+        const resultado = await new CreateDirecionamentoInternoService().execute({
+            tipoServico,
+            items,
+            observacao
+        }, usuarioId);
+
+        return res.status(201).json(resultado);
     }
 }
 
@@ -120,6 +136,7 @@ class ListRemessasProntasController {
 
 export {
     CreateDirecionamentoController,
+    CreateDirecionamentoInternoController,
     ListAllDirecionamentoController,
     ListByIdDirecionamentoController,
     UpdateDirecionamentoController,

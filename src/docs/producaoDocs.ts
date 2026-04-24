@@ -7,6 +7,7 @@ import {
     addLoteItemsSchema,
     addRolosLoteSchema,
     createDirecionamentoSchema,
+    createDirecionamentoInternoSchema,
     updateDirecionamentoSchema,
     updateDirecionamentoItemsSchema,
     updateDirecionamentoStatusSchema,
@@ -246,6 +247,7 @@ const conferenciaSchema = z.object({
     statusQualidade: z.string().nullable(),
     observacao: z.string().nullable(),
     liberadoPagamento: z.boolean(),
+    isProducaoInterna: z.boolean(),
     responsavel: z.object({
         id: z.string().uuid(),
         nome: z.string(),
@@ -900,6 +902,46 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
         }
     });
 
+    // POST /direcionamentos/producao-interna - Criar remessa interna + conferência automática
+    registry.registerPath({
+        method: 'post',
+        path: '/direcionamentos/producao-interna',
+        tags: [TAG_DIRECIONAMENTOS],
+        summary: 'Criar remessa interna com conferência automática',
+        description: 'Cria um direcionamento para facção interna e já cria conferência aprovada automaticamente.',
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: createDirecionamentoInternoSchema.shape.body
+                    }
+                }
+            }
+        },
+        security: [{ bearerAuth: [] }],
+        responses: {
+            201: {
+                description: 'Remessa interna e conferência criadas com sucesso',
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            direcionamento: direcionamentoSchema,
+                            conferencia: conferenciaSchema
+                        })
+                    }
+                }
+            },
+            400: {
+                description: 'Erro de validação',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
+            }
+        }
+    });
+
     // GET /direcionamentos - Listar direcionamentos
     registry.registerPath({
         method: 'get',
@@ -1221,8 +1263,14 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
             query: z.object({
                 page: z.coerce.number().int().positive().optional().describe('Número da página (padrão: 1)'),
                 limit: z.coerce.number().int().positive().optional().describe('Itens por página (padrão: 10)'),
-                statusQualidade: z.enum(['validando', 'conforme', 'nao_conforme', 'com_defeito']).optional().describe('Filtro por status da qualidade'),
-                liberadoPagamento: z.coerce.boolean().optional().describe('Filtro por liberação de pagamento')
+                statusQualidade: z.enum(['recebido', 'em_conferencia', 'aprovado', 'aprovado_parcial', 'aprovado_defeito']).optional().describe('Filtro por status da qualidade'),
+                liberadoPagamento: z.coerce.boolean().optional().describe('Filtro por liberação de pagamento'),
+                isProducaoInterna: z.coerce.boolean().optional().describe('Filtrar conferências internas/externas'),
+                direcionamentoId: z.string().uuid().optional().describe('Filtrar por direcionamento'),
+                faccaoId: z.string().uuid().optional().describe('Filtrar por facção do direcionamento'),
+                responsavelId: z.string().uuid().optional().describe('Filtrar por responsável da conferência'),
+                dataInicio: z.string().optional().describe('Data inicial (YYYY-MM-DD ou datetime ISO)'),
+                dataFim: z.string().optional().describe('Data final (YYYY-MM-DD ou datetime ISO)')
             }).partial()
         },
         security: [{ bearerAuth: [] }],

@@ -2,6 +2,8 @@ import { ICreateFaccaoRequest, IUpdateFaccaoRequest } from "../../interfaces/IPr
 import { parsePaginationParams, createPaginatedResponse, PaginatedResponse } from "../../utils/pagination";
 import prismaClient from "../../prisma";
 
+const NOME_FACCAO_PRODUCAO_INTERNA = "Produção Interna";
+
 class CreateFaccaoService {
     async execute({ nome, responsavel, contato, prazoMedioDias, status }: ICreateFaccaoRequest) {
         const faccaoAlreadyExists = await prismaClient.faccao.findFirst({
@@ -33,9 +35,16 @@ class ListAllFaccaoService {
     async execute(status?: string, page?: number | string, limit?: number | string): Promise<PaginatedResponse<any>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
+        const where = {
+            ...(status && { status }),
+            nome: {
+                not: NOME_FACCAO_PRODUCAO_INTERNA
+            }
+        };
+
         const [faccoes, total] = await Promise.all([
             prismaClient.faccao.findMany({
-                where: status ? { status } : undefined,
+                where,
                 include: {
                     direcionamentos: true
                 },
@@ -46,7 +55,7 @@ class ListAllFaccaoService {
                 }
             }),
             prismaClient.faccao.count({
-                where: status ? { status } : undefined
+                where
             })
         ]);
 
@@ -78,7 +87,7 @@ class ListByIdFaccaoService {
             }
         });
 
-        if (!faccao) {
+        if (!faccao || faccao.nome === NOME_FACCAO_PRODUCAO_INTERNA) {
             throw new Error("Facção não encontrada.");
         }
 

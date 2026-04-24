@@ -21,7 +21,18 @@ class CreateConferenciaController {
 
 class ListAllConferenciaController {
     async handle(req: Request, res: Response) {
-        const { statusQualidade, liberadoPagamento, page, limit } = req.query;
+        const {
+            statusQualidade,
+            liberadoPagamento,
+            isProducaoInterna,
+            direcionamentoId,
+            faccaoId,
+            responsavelId,
+            dataInicio,
+            dataFim,
+            page,
+            limit
+        } = req.query;
 
         const statusQualidadeFiltro = typeof statusQualidade === "string" ? statusQualidade : undefined;
         const liberadoPagamentoFiltro =
@@ -33,9 +44,24 @@ class ListAllConferenciaController {
                         : undefined
                 : undefined;
 
+        const isProducaoInternaFiltro =
+            typeof isProducaoInterna === "string"
+                ? isProducaoInterna === "true"
+                    ? true
+                    : isProducaoInterna === "false"
+                        ? false
+                        : undefined
+                : undefined;
+
         const conferencias = await new ListAllConferenciaService().execute(
             statusQualidadeFiltro,
             liberadoPagamentoFiltro,
+            isProducaoInternaFiltro,
+            direcionamentoId as string | undefined,
+            faccaoId as string | undefined,
+            responsavelId as string | undefined,
+            dataInicio as string | undefined,
+            dataFim as string | undefined,
             page as string | number | undefined,
             limit as string | number | undefined
         );

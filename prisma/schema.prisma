@@ -382,6 +382,7 @@ model Conferencia {
   dataConferencia    DateTime? @map("data_conferencia") @db.Date
   observacao         String?
   liberadoPagamento  Boolean  @default(false) @map("liberado_pagamento")
+  isProducaoInterna  Boolean  @default(false) @map("is_producao_interna")
   status    String?  @map("status")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")

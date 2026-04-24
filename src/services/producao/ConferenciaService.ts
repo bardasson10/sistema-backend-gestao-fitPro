@@ -161,6 +161,7 @@ interface IConferenciaResponse {
     statusQualidade: string | null;
     observacao: string | null;
     liberadoPagamento: boolean;
+    isProducaoInterna: boolean;
     responsavel: {
         id: string;
         nome: string;
@@ -251,6 +252,7 @@ function mapConferenciaToResponse(conferencia: any): IConferenciaResponse {
         statusQualidade: conferencia.status,
         observacao: conferencia.observacao,
         liberadoPagamento: conferencia.liberadoPagamento,
+        isProducaoInterna: Boolean(conferencia.isProducaoInterna),
         responsavel: {
             id: conferencia.responsavel.id,
             nome: conferencia.responsavel.nome
@@ -358,6 +360,7 @@ class CreateConferenciaService {
                     status: statusFinal,
                     observacao,
                     liberadoPagamento: liberadoFinal,
+                    isProducaoInterna: false,
                     items: itemsNormalizados.length > 0 ? {
                         create: itemsNormalizados.map(item => ({
                             direcionamentoItemId: item.direcionamentoItemId,
@@ -383,29 +386,86 @@ class CreateConferenciaService {
 }
 
 class ListAllConferenciaService {
-    async execute(statusQualidade?: string, liberadoPagamento?: boolean, page?: number | string, limit?: number | string): Promise<PaginatedResponse<IConferenciaResponse>> {
+    async execute(
+        statusQualidade?: string,
+        liberadoPagamento?: boolean,
+        isProducaoInterna?: boolean,
+        direcionamentoId?: string,
+        faccaoId?: string,
+        responsavelId?: string,
+        dataInicio?: string,
+        dataFim?: string,
+        page?: number | string,
+        limit?: number | string
+    ): Promise<PaginatedResponse<IConferenciaResponse>> {
         const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
 
-        const andConditions: any[] = [
-            {
+        const andConditions: any[] = [];
+
+        if (statusQualidade) {
+            andConditions.push({ status: statusQualidade });
+        } else {
+            andConditions.push({
                 NOT: {
                     status: STATUS_RECEBIDO
                 }
-            }
-        ];
-        
-        if (statusQualidade || liberadoPagamento !== undefined) {
-            andConditions.push({
-                ...(statusQualidade && { status: statusQualidade }),
-                ...(liberadoPagamento !== undefined && { liberadoPagamento })
             });
-        } else {
+        }
+
+        if (liberadoPagamento !== undefined) {
+            andConditions.push({ liberadoPagamento });
+        }
+
+        if (isProducaoInterna !== undefined) {
+            andConditions.push({ isProducaoInterna });
+        }
+
+        if (direcionamentoId) {
+            andConditions.push({ direcionamentoId });
+        }
+
+        if (responsavelId) {
+            andConditions.push({ responsavelId });
+        }
+
+        if (faccaoId) {
+            andConditions.push({
+                direcionamento: {
+                    is: {
+                        faccaoId
+                    }
+                }
+            });
+        }
+
+        if (dataInicio || dataFim) {
+            andConditions.push({
+                dataConferencia: {
+                    ...(dataInicio && { gte: new Date(dataInicio) }),
+                    ...(dataFim && { lte: new Date(dataFim) })
+                }
+            });
+        }
+
+        const possuiFiltroExplcito = Boolean(
+            statusQualidade
+            || liberadoPagamento !== undefined
+            || isProducaoInterna !== undefined
+            || direcionamentoId
+            || faccaoId
+            || responsavelId
+            || dataInicio
+            || dataFim
+        );
+
+        if (!possuiFiltroExplcito) {
             // Padrão: não mostrar conferências finalizadas com pagamento liberado.
             andConditions.push({
                 NOT: {
                     AND: [
                         { status: { in: [STATUS_APROVADO, STATUS_APROVADO_DEFEITO] } },
-                        { liberadoPagamento: true }
+                        { liberadoPagamento: true },
+                        { isProducaoInterna: false }
                     ]
                 }
             });

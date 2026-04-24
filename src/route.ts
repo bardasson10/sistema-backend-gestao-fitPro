@@ -37,6 +37,7 @@ import { CreateFaccaoController, ListAllFaccaoController, ListByIdFaccaoControll
 import { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, DeleteLoteProducaoController, ResumoPorCorLoteController } from "./controllers/producao/LoteProducaoController";
 import {
 	CreateDirecionamentoController,
+	CreateDirecionamentoInternoController,
 	ListAllDirecionamentoController,
 	ListByIdDirecionamentoController,
 	UpdateDirecionamentoController,
@@ -56,6 +57,7 @@ import {
 	addLoteItemsSchema,
 	addRolosLoteSchema,
 	createDirecionamentoSchema,
+	createDirecionamentoInternoSchema,
 	updateDirecionamentoSchema,
 	updateDirecionamentoItemsSchema,
 	updateDirecionamentoStatusSchema,
@@ -163,6 +165,7 @@ router.delete("/lotes-producao/:id", isAuthenticated, isAdmin, new DeleteLotePro
 
 // ==================== DIRECIONAMENTOS ====================
 router.post("/direcionamentos", isAuthenticated, validateSchema(createDirecionamentoSchema), new CreateDirecionamentoController().handle);
+router.post("/direcionamentos/producao-interna", isAuthenticated, validateSchema(createDirecionamentoInternoSchema), new CreateDirecionamentoInternoController().handle);
 router.get("/direcionamentos", isAuthenticated, new ListAllDirecionamentoController().handle);
 router.get("/direcionamentos/prontas", isAuthenticated, new ListRemessasProntasController().handle);
 router.get("/direcionamentos/:id", isAuthenticated, new ListByIdDirecionamentoController().handle);

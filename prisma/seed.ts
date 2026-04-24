@@ -5,6 +5,23 @@ import PrismaClient  from '../src/prisma/index';
 async function main() {
     console.log('🌱 Iniciando seed...');
 
+    console.log('🏭 Garantindo facção interna...');
+    const faccaoInterna = await PrismaClient.faccao.findFirst({
+        where: { nome: 'Produção Interna' }
+    });
+
+    if (!faccaoInterna) {
+        await PrismaClient.faccao.create({
+            data: {
+                nome: 'Produção Interna',
+                status: 'ativo'
+            }
+        });
+        console.log('  ✓ Facção Produção Interna criada');
+    } else {
+        console.log('  ⊘ Facção Produção Interna já existe');
+    }
+
     // Seed de Tamanhos
     const tamanhos = [
         { nome: 'PP', ordem: 1 },
