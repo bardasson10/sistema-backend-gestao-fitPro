@@ -233,4 +233,166 @@ class AjusteEstoqueCorteService {
     }
 }
 
-export { ListAllEstoqueCorteService, ListByIdEstoqueCorteService, AjusteEstoqueCorteService };
+class CriarOuAjustarEstoqueCorteService {
+    async execute(
+        produtoId: string,
+        loteProducaoId: string,
+        tamanhoId: string,
+        corId: string,
+        novaQuantidade: number,
+        motivo: string,
+        usuarioId?: string
+    ) {
+        const estoqueExistente = await prismaClient.estoqueCorte.findUnique({
+            where: {
+                loteProducaoId_produtoId_tamanhoId_corId: {
+                    loteProducaoId,
+                    produtoId,
+                    tamanhoId,
+                    corId
+                }
+            },
+            include: {
+                produto: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        sku: true
+                    }
+                },
+                tamanho: {
+                    select: {
+                        id: true,
+                        nome: true
+                    }
+                },
+                cor: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        codigoHex: true
+                    }
+                },
+                lote: {
+                    select: {
+                        id: true,
+                        codigoLote: true,
+                        tecido: {
+                            select: {
+                                id: true,
+                                nome: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (estoqueExistente) {
+            const atualizado = await prismaClient.estoqueCorte.update({
+                where: { id: estoqueExistente.id },
+                data: {
+                    quantidadeDisponivel: novaQuantidade
+                },
+                include: {
+                    produto: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            sku: true
+                        }
+                    },
+                    tamanho: {
+                        select: {
+                            id: true,
+                            nome: true
+                        }
+                    },
+                    cor: {
+                        select: {
+                            id: true,
+                            nome: true,
+                            codigoHex: true
+                        }
+                    },
+                    lote: {
+                        select: {
+                            id: true,
+                            codigoLote: true,
+                            tecido: {
+                                select: {
+                                    id: true,
+                                    nome: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            return {
+                message: "Estoque de corte ajustado com sucesso.",
+                motivo,
+                usuarioId,
+                quantidadeAnterior: estoqueExistente.quantidadeDisponivel,
+                quantidadeAtual: atualizado.quantidadeDisponivel,
+                item: atualizado
+            };
+        }
+
+        const criado = await prismaClient.estoqueCorte.create({
+            data: {
+                produtoId,
+                loteProducaoId,
+                tamanhoId,
+                corId,
+                quantidadeDisponivel: novaQuantidade
+            },
+            include: {
+                produto: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        sku: true
+                    }
+                },
+                tamanho: {
+                    select: {
+                        id: true,
+                        nome: true
+                    }
+                },
+                cor: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        codigoHex: true
+                    }
+                },
+                lote: {
+                    select: {
+                        id: true,
+                        codigoLote: true,
+                        tecido: {
+                            select: {
+                                id: true,
+                                nome: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        return {
+            message: "Estoque de corte criado com sucesso.",
+            motivo,
+            usuarioId,
+            quantidadeAnterior: 0,
+            quantidadeAtual: criado.quantidadeDisponivel,
+            item: criado
+        };
+    }
+}
+
+export { ListAllEstoqueCorteService, ListByIdEstoqueCorteService, AjusteEstoqueCorteService, CriarOuAjustarEstoqueCorteService };

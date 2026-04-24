@@ -144,7 +144,7 @@ router.get("/movimentacoes-estoque/:estoqueRoloId/historico", isAuthenticated, n
 // ==================== ESTOQUE DE CORTE ====================
 router.get("/estoque-corte", isAuthenticated, validateSchema(listEstoqueCorteSchema), new ListAllEstoqueCorteController().handle);
 router.get("/estoque-corte/:id", isAuthenticated, new ListByIdEstoqueCorteController().handle);
-router.patch("/estoque-corte/:id/ajuste", isAuthenticated, isManagerOrAdmin, validateSchema(ajusteEstoqueCorteSchema), new AjusteEstoqueCorteController().handle);
+router.patch("/estoque-corte/ajuste", isAuthenticated, isManagerOrAdmin, validateSchema(ajusteEstoqueCorteSchema), new AjusteEstoqueCorteController().handle);
 
 // ==================== FACÇÕES ====================
 router.post("/faccoes", isAuthenticated, validateSchema(createFaccaoSchema), new CreateFaccaoController().handle);

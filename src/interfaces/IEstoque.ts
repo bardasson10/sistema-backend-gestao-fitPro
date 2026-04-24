@@ -56,6 +56,10 @@ export interface IRelatoriEstoqueResponse {
 }
 
 export interface IAjusteEstoqueCorteRequest {
+    produtoId: string;
+    loteProducaoId: string;
+    tamanhoId: string;
+    corId: string;
     novaQuantidade: number;
     motivo: string;
 }

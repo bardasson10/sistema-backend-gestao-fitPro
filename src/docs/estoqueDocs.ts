@@ -280,21 +280,22 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         }
     });
 
-    // PATCH /estoque-corte/{id}/ajuste - Ajuste manual de saldo
+    // PATCH /estoque-corte/ajuste - Ajuste manual de saldo ou criação quando não existir
     registry.registerPath({
         method: 'patch',
-        path: '/estoque-corte/{id}/ajuste',
+        path: '/estoque-corte/ajuste',
         tags: ['Estoque'],
-        summary: 'Ajustar saldo do estoque de corte (ADM/GERENTE)',
+        summary: 'Ajustar ou criar saldo do estoque de corte (ADM/GERENTE)',
         security: [{ bearerAuth: [] }],
         request: {
-            params: z.object({
-                id: z.uuid()
-            }),
             body: {
                 content: {
                     'application/json': {
                         schema: z.object({
+                            produtoId: z.uuid(),
+                            loteProducaoId: z.uuid(),
+                            tamanhoId: z.uuid(),
+                            corId: z.uuid(),
                             novaQuantidade: z.number().int().nonnegative(),
                             motivo: z.string().min(3)
                         })
@@ -304,7 +305,7 @@ export function registerEstoqueRoutes(registry: OpenAPIRegistry) {
         },
         responses: {
             200: {
-                description: 'Saldo ajustado com sucesso',
+                description: 'Saldo ajustado ou criado com sucesso',
                 content: {
                     'application/json': {
                         schema: ajusteEstoqueCorteResponseSchema
