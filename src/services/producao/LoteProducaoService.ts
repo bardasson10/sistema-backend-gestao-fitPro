@@ -428,30 +428,43 @@ function formatarLoteResponse(lote: any) {
         pesoReservado: Number(lr.pesoReservado)
     }));
 
-    const pesoTotal = rolosList.reduce((acumulador: number, rolo: any) => acumulador + Number(rolo.pesoReservado), 0);
-    const valorPorKgTotal = Array.from(
-        new Map<string, number>(
-            rolosList
-                .filter((rolo: any) => rolo?.tecido?.id)
-                .map((rolo: any) => [rolo.tecido.id, Number(rolo.tecido?.valorPorKg ?? 0)])
-        ).values()
-    ).reduce((acumulador: number, valor: number) => acumulador + valor, 0);
+    // Agrupar rolos por tecido para criar materiais separados
+    const materiaisPorTecidoMap = new Map<string, {
+        tecido: any;
+        rolos: any[];
+        coresMap: Map<string, { cor: any; rolos: any[] }>;
+    }>();
 
-    const coresMap = new Map<string, { cor: any; rolos: any[] }>();
     for (const rolo of rolosList) {
+        const tecidoId = rolo?.tecido?.id ?? `sem-tecido-${rolo.id}`;
+        
+        if (!materiaisPorTecidoMap.has(tecidoId)) {
+            materiaisPorTecidoMap.set(tecidoId, {
+                tecido: rolo?.tecido ?? null,
+                rolos: [],
+                coresMap: new Map()
+            });
+        }
+
+        const materialTecido = materiaisPorTecidoMap.get(tecidoId)!;
+        materialTecido.rolos.push(rolo);
+
         const corDoRolo = rolo?.tecido?.cor;
         const corKey = corDoRolo?.id ?? `sem-cor-${rolo.id}`;
 
-        if (!coresMap.has(corKey)) {
-            coresMap.set(corKey, {
+        if (!materialTecido.coresMap.has(corKey)) {
+            materialTecido.coresMap.set(corKey, {
                 cor: corDoRolo ?? null,
                 rolos: []
             });
         }
 
-        const grupoCor = coresMap.get(corKey)!;
+        const grupoCor = materialTecido.coresMap.get(corKey)!;
         grupoCor.rolos.push(rolo);
     }
+
+    // Usar o primeiro mapa de cores para compatibilidade com código antigo
+    const coresMap = Array.from(materiaisPorTecidoMap.values())[0]?.coresMap ?? new Map();
 
     const corNomeParaId = new Map<string, string>();
     for (const [corId, grupoCor] of coresMap.entries()) {
@@ -591,41 +604,203 @@ function formatarLoteResponse(lote: any) {
         }
     }
 
-    const cores = Array.from(coresMap.values()).map(grupoCor => ({
-        corId: grupoCor.cor?.id,
-        nome: grupoCor.cor?.nome,
-        qtdFolhas: qtdFolhasPorCor.get(grupoCor.cor?.id ?? "") ?? 0,
-        valorTecido: Array.from(
+    // Construir materiais agrupados por tecido
+    const materiais = Array.from(materiaisPorTecidoMap.entries()).map(([_, materialTecido]) => {
+        const tecido = materialTecido.tecido;
+        const rolosPorTecido = materialTecido.rolos;
+        
+        const corNomeParaId = new Map<string, string>();
+        for (const [corId, grupoCor] of materialTecido.coresMap.entries()) {
+            if (!grupoCor.cor?.nome) {
+                continue;
+            }
+            corNomeParaId.set(String(grupoCor.cor.nome).trim().toLowerCase(), corId);
+        }
+
+        const corIdsDisponiveis = Array.from(materialTecido.coresMap.keys()).filter(corId => !corId.startsWith("sem-cor-"));
+
+        const resolverCorKeyEnfesto = (enfesto: any) => {
+            const valorOriginal = enfesto?.corId ?? enfesto?.cor;
+            if (!valorOriginal) {
+                const corIdDoPrimeiroRolo = enfesto?.rolos?.[0]?.rolo?.tecido?.cor?.id;
+                if (corIdDoPrimeiroRolo && materialTecido.coresMap.has(corIdDoPrimeiroRolo)) {
+                    console.warn("[LoteProducao] Fallback de cor aplicado (enfesto sem cor/corId)", {
+                        enfestoId: enfesto?.id,
+                        corFallbackId: corIdDoPrimeiroRolo
+                    });
+                    return corIdDoPrimeiroRolo;
+                }
+
+                console.warn("[LoteProducao] Não foi possível resolver cor do enfesto (sem cor/corId e sem rolo)", {
+                    enfestoId: enfesto?.id
+                });
+                return undefined;
+            }
+
+            if (materialTecido.coresMap.has(valorOriginal)) {
+                return valorOriginal;
+            }
+
+            const valorNormalizado = String(valorOriginal).trim().toLowerCase();
+            const corPorNome = corNomeParaId.get(valorNormalizado);
+            if (corPorNome) {
+                return corPorNome;
+            }
+
+            const corIdDoPrimeiroRolo = enfesto?.rolos?.[0]?.rolo?.tecido?.cor?.id;
+            if (corIdDoPrimeiroRolo && materialTecido.coresMap.has(corIdDoPrimeiroRolo)) {
+                console.warn("[LoteProducao] Fallback de cor aplicado (nome/id de cor não mapeado)", {
+                    enfestoId: enfesto?.id,
+                    valorOriginal,
+                    corFallbackId: corIdDoPrimeiroRolo
+                });
+                return corIdDoPrimeiroRolo;
+            }
+
+            console.warn("[LoteProducao] Não foi possível resolver cor do enfesto", {
+                enfestoId: enfesto?.id,
+                valorOriginal
+            });
+
+            return undefined;
+        };
+
+        const qtdFolhasPorCor = new Map<string, number>();
+        const gradeLotePorCor = new Map<string, any[]>();
+        const gradeLotePorCorSet = new Set<string>();
+        const enfestosComputados = new Set<string>();
+
+        const resolverQtdMultiplicadorGradeItem = (item: any, corKey: string) => {
+            const enfestoDaCor = (item.enfestos ?? []).find((enfesto: any) => {
+                const corDoEnfesto = resolverCorKeyEnfesto(enfesto);
+                return corDoEnfesto === corKey;
+            });
+
+            if (!enfestoDaCor || Number(enfestoDaCor.qtdFolhas) <= 0) {
+                return null;
+            }
+
+            const quantidadePlanejada = Number(item.quantidadePlanejada);
+            const qtdFolhas = Number(enfestoDaCor.qtdFolhas);
+            const qtdMultiplicadorGrade = quantidadePlanejada / qtdFolhas;
+
+            if (!Number.isFinite(qtdMultiplicadorGrade)) {
+                return null;
+            }
+
+            return qtdMultiplicadorGrade;
+        };
+
+        const montarGradeItem = (corKey: string, item: any) => ({
+            id: item.id,
+            produtoId: item.produtoId,
+            tamanhoId: item.tamanhoId,
+            quantidadePlanejada: Number(item.quantidadePlanejada),
+            qtdMultiplicadorGrade: resolverQtdMultiplicadorGradeItem(item, corKey),
+            produtoNome: item.produto?.nome,
+            sku: item.produto?.sku,
+            tamanhoNome: item.tamanho?.nome
+        });
+
+        const adicionarGradePorCor = (corKey: string, item: any) => {
+            const chaveUnica = `${corKey}:${item.id}`;
+            if (gradeLotePorCorSet.has(chaveUnica)) {
+                return;
+            }
+
+            const gradeCorAtual = gradeLotePorCor.get(corKey) ?? [];
+            gradeCorAtual.push(montarGradeItem(corKey, item));
+            gradeLotePorCor.set(corKey, gradeCorAtual);
+            gradeLotePorCorSet.add(chaveUnica);
+        };
+
+        for (const item of lote.items) {
+            const enfestosItem = item.enfestos ?? [];
+
+            if (enfestosItem.length === 0) {
+                for (const corId of corIdsDisponiveis) {
+                    adicionarGradePorCor(corId, item);
+                }
+                continue;
+            }
+
+            for (const enfesto of item.enfestos ?? []) {
+                const corKey = resolverCorKeyEnfesto(enfesto);
+                if (!corKey) {
+                    continue;
+                }
+
+                // Verificar se este enfesto pertence a este tecido
+                const rolosDoEnfesto = enfesto.rolos ?? [];
+                const rolosEnfestoPertencemAoTecido = rolosDoEnfesto.some((enfestoRolo: any) => {
+                    return rolosPorTecido.some(roloTecido => roloTecido.id === enfestoRolo.estoqueRoloId);
+                });
+
+                if (!rolosEnfestoPertencemAoTecido && rolosDoEnfesto.length > 0) {
+                    // Este enfesto não pertence a este tecido
+                    continue;
+                }
+
+                const rolosKey = (enfesto.rolos ?? [])
+                    .map((enfestoRolo: any) => enfestoRolo.estoqueRoloId)
+                    .filter(Boolean)
+                    .sort()
+                    .join(",");
+
+                const enfestoKey = `${corKey}|${enfesto.qtdFolhas}|${rolosKey}`;
+                if (!enfestosComputados.has(enfestoKey)) {
+                    const qtdAtual = qtdFolhasPorCor.get(corKey) ?? 0;
+                    qtdFolhasPorCor.set(corKey, qtdAtual + enfesto.qtdFolhas);
+                    enfestosComputados.add(enfestoKey);
+                }
+
+                adicionarGradePorCor(corKey, item);
+            }
+        }
+
+        const cores = Array.from(materialTecido.coresMap.values()).map(grupoCor => ({
+            corId: grupoCor.cor?.id,
+            nome: grupoCor.cor?.nome,
+            qtdFolhas: qtdFolhasPorCor.get(grupoCor.cor?.id ?? "") ?? 0,
+            valorTecido: Array.from(
+                new Map<string, number>(
+                    grupoCor.rolos
+                        .filter((rolo: any) => rolo?.tecido?.id)
+                        .map((rolo: any) => [rolo.tecido.id, Number(rolo.tecido?.valorPorKg ?? 0)])
+                ).values()
+            ).reduce((acumulador: number, valor: number) => acumulador + valor, 0),
+            codigoHex: grupoCor.cor?.codigoHex,
+            rolos: grupoCor.rolos.map((rolo: any) => ({
+                id: rolo.id,
+                codigoBarraRolo: rolo.codigoBarraRolo,
+                pesoAtualKg: Number(rolo.pesoAtualKg),
+                pesoReservado: Number(rolo.pesoReservado),
+                situacao: rolo.situacao
+            })),
+            gradeLote: gradeLotePorCor.get(grupoCor.cor?.id ?? "") ?? []
+        }));
+
+        const pesoTotalTecido = rolosPorTecido.reduce((acumulador: number, rolo: any) => acumulador + Number(rolo.pesoReservado), 0);
+        const valorPorKgTotalTecido = Array.from(
             new Map<string, number>(
-                grupoCor.rolos
+                rolosPorTecido
                     .filter((rolo: any) => rolo?.tecido?.id)
                     .map((rolo: any) => [rolo.tecido.id, Number(rolo.tecido?.valorPorKg ?? 0)])
             ).values()
-        ).reduce((acumulador: number, valor: number) => acumulador + valor, 0),
-        codigoHex: grupoCor.cor?.codigoHex,
-        rolos: grupoCor.rolos.map((rolo: any) => ({
-            id: rolo.id,
-            codigoBarraRolo: rolo.codigoBarraRolo,
-            pesoAtualKg: Number(rolo.pesoAtualKg),
-            pesoReservado: Number(rolo.pesoReservado),
-            situacao: rolo.situacao
-        })),
-        gradeLote: gradeLotePorCor.get(grupoCor.cor?.id ?? "") ?? []
-    }));
+        ).reduce((acumulador: number, valor: number) => acumulador + valor, 0);
 
-    const materiais = [
-        {
-            tecidoId: lote.tecidoId,
-            nome: lote.tecido?.nome,
-            codigoReferencia: lote.tecido?.codigoReferencia,
-            rendimentoMetroKg: Number(lote.tecido?.rendimentoMetroKg),
-            larguraMetros: Number(lote.tecido?.larguraMetros),
-            gramatura: Number(lote.tecido?.gramatura),
-            valorPorKg: valorPorKgTotal,
-            pesoTotal,
+        return {
+            tecidoId: tecido?.id,
+            nome: tecido?.nome,
+            codigoReferencia: tecido?.codigoReferencia,
+            rendimentoMetroKg: Number(tecido?.rendimentoMetroKg),
+            larguraMetros: Number(tecido?.larguraMetros),
+            gramatura: Number(tecido?.gramatura),
+            valorPorKg: valorPorKgTotalTecido,
+            pesoTotal: pesoTotalTecido,
             cores
-        }
-    ];
+        };
+    });
 
     const direcionamentosMap = new Map<string, {
         id: string;
