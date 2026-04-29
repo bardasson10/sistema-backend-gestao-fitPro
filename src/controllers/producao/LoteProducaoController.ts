@@ -95,6 +95,9 @@ class RemoveRoloLoteController {
         const id = req.params.id as string;
         const { estoqueRoloId } = req.params;
         const usuarioId = req.userId;
+        if (!estoqueRoloId || Array.isArray(estoqueRoloId)) {
+            return res.status(400).json({ error: "ID de rolo inválido." });
+        }
         const lote = await new RemoveRoloLoteService().execute(id, estoqueRoloId, usuarioId);
         return res.json(lote);
     }

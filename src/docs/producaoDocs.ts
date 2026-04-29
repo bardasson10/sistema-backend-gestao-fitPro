@@ -6,7 +6,6 @@ import {
     updateLoteProducaoSchema,
     addLoteItemsSchema,
     addRolosLoteSchema,
-    removeRoloLoteSchema,
     createDirecionamentoSchema,
     createDirecionamentoInternoSchema,
     updateDirecionamentoSchema,
