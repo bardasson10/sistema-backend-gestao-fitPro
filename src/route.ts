@@ -34,7 +34,7 @@ import { createEstoqueRoloSchema, updateEstoqueRoloSchema, createMovimentacaoEst
 
 // Produção Controllers
 import { CreateFaccaoController, ListAllFaccaoController, ListByIdFaccaoController, UpdateFaccaoController, DeleteFaccaoController } from "./controllers/producao/FaccaoController";
-import { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, DeleteLoteProducaoController, ResumoPorCorLoteController } from "./controllers/producao/LoteProducaoController";
+import { CreateLoteProducaoController, ListAllLoteProducaoController, ListByIdLoteProducaoController, UpdateLoteProducaoController, AddLoteItemsController, AddRolosLoteController, RemoveRoloLoteController, DeleteLoteProducaoController, ResumoPorCorLoteController } from "./controllers/producao/LoteProducaoController";
 import {
 	CreateDirecionamentoController,
 	CreateDirecionamentoInternoController,
@@ -64,7 +64,8 @@ import {
 	updateDirecionamentoSkuPriceSchema,
 	createConferenciaSchema,
 	updateConferenciaSchema,
-	listConferenciaSchema
+	listConferenciaSchema,
+	removeRoloLoteSchema
 } from "./schemas/producaoSchemas";
 
 
@@ -161,6 +162,7 @@ router.get("/lotes-producao/:id", isAuthenticated, new ListByIdLoteProducaoContr
 router.put("/lotes-producao/:id", isAuthenticated, validateSchema(updateLoteProducaoSchema), new UpdateLoteProducaoController().handle);
 router.post("/lotes-producao/:id/items", isAuthenticated, validateSchema(addLoteItemsSchema), new AddLoteItemsController().handle);
 router.post("/lotes-producao/:id/rolos", isAuthenticated, validateSchema(addRolosLoteSchema), new AddRolosLoteController().handle);
+router.delete("/lotes-producao/:id/rolos/:estoqueRoloId", isAuthenticated, validateSchema(removeRoloLoteSchema), new RemoveRoloLoteController().handle);
 router.delete("/lotes-producao/:id", isAuthenticated, isAdmin, new DeleteLoteProducaoController().handle);
 
 // ==================== DIRECIONAMENTOS ====================

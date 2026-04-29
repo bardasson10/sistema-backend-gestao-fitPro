@@ -6,6 +6,7 @@ import {
     updateLoteProducaoSchema,
     addLoteItemsSchema,
     addRolosLoteSchema,
+    removeRoloLoteSchema,
     createDirecionamentoSchema,
     createDirecionamentoInternoSchema,
     updateDirecionamentoSchema,
@@ -825,6 +826,39 @@ export function registerProducaoRoutes(registry: OpenAPIRegistry) {
             },
             404: {
                 description: 'Lote de produção não encontrado',
+                content: {
+                    'application/json': {
+                        schema: errorSchema
+                    }
+                }
+            }
+        }
+    });
+
+    // DELETE /lotes-producao/{id}/rolos/{estoqueRoloId} - Remover rolo do lote
+    registry.registerPath({
+        method: 'delete',
+        path: '/lotes-producao/{id}/rolos/{estoqueRoloId}',
+        tags: [TAG_LOTES],
+        summary: 'Remover rolo do lote de produção',
+        request: {
+            params: z.object({
+                id: z.uuid(),
+                estoqueRoloId: z.uuid()
+            })
+        },
+        security: [{ bearerAuth: [] }],
+        responses: {
+            200: {
+                description: 'Rolo removido do lote',
+                content: {
+                    'application/json': {
+                        schema: loteSchema
+                    }
+                }
+            },
+            404: {
+                description: 'Lote ou rolo não encontrado',
                 content: {
                     'application/json': {
                         schema: errorSchema

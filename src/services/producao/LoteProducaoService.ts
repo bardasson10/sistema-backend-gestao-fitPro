@@ -1546,6 +1546,97 @@ class AddRolosLoteService {
     }
 }
 
+class RemoveRoloLoteService {
+    async execute(id: string, estoqueRoloId: string, usuarioId?: string) {
+        const lote = await prismaClient.loteProducao.findUnique({
+            where: { id }
+        });
+
+        if (!lote) {
+            throw new Error("Lote não encontrado.");
+        }
+
+        if (lote.status === "cortado") {
+            throw new Error("Não é possível remover rolos de um lote cortado.");
+        }
+
+        const rolosVinculados = await prismaClient.loteRolo.findMany({
+            where: {
+                loteProducaoId: id,
+                estoqueRoloId
+            }
+        });
+
+        if (rolosVinculados.length === 0) {
+            throw new Error("Rolo não encontrado neste lote.");
+        }
+
+        const pesoTotalEstorno = rolosVinculados.reduce((total, rolo) => total + Number(rolo.pesoReservado), 0);
+
+        const loteAtualizado = await prismaClient.$transaction(async (tx) => {
+            const roloEstoque = await tx.estoqueRolo.findUnique({
+                where: { id: estoqueRoloId }
+            });
+
+            if (!roloEstoque) {
+                throw new Error("Rolo de estoque não encontrado.");
+            }
+
+            const pesoAtual = Number(roloEstoque.pesoAtualKg);
+            const novoPeso = pesoAtual + pesoTotalEstorno;
+            const usuarioMovimentacao = usuarioId ?? lote.responsavelId;
+
+            await tx.movimentacaoEstoque.create({
+                data: {
+                    estoqueRoloId,
+                    usuarioId: usuarioMovimentacao,
+                    tipoMovimentacao: "entrada",
+                    pesoMovimentado: pesoTotalEstorno
+                }
+            });
+
+            await tx.estoqueRolo.update({
+                where: { id: estoqueRoloId },
+                data: {
+                    pesoAtualKg: novoPeso,
+                    situacao: novoPeso <= 0 ? "esgotado" : "disponivel"
+                }
+            });
+
+            await tx.loteRolo.deleteMany({
+                where: {
+                    loteProducaoId: id,
+                    estoqueRoloId
+                }
+            });
+
+            const rolosRestantes = await tx.loteRolo.count({
+                where: { loteProducaoId: id }
+            });
+
+            if (rolosRestantes === 0 && lote.status === "enfesto") {
+                await tx.loteProducao.update({
+                    where: { id },
+                    data: {
+                        status: "lote_criado"
+                    }
+                });
+            }
+
+            return tx.loteProducao.findUnique({
+                where: { id },
+                include: loteInclude
+            });
+        }, INTERACTIVE_TRANSACTION_OPTIONS);
+
+        if (!loteAtualizado) {
+            throw new Error("Erro ao atualizar lote.");
+        }
+
+        return formatarLoteResponse(loteAtualizado);
+    }
+}
+
 class ResumoPorCorLoteService {
     async execute({
         status,
@@ -2164,4 +2255,4 @@ class ResumoPorCorLoteService {
     }
 }
 
-export { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, AddRolosLoteService, DeleteLoteProducaoService, ResumoPorCorLoteService };
+export { CreateLoteProducaoService, ListAllLoteProducaoService, ListByIdLoteProducaoService, UpdateLoteProducaoService, AddLoteItemsService, AddRolosLoteService, RemoveRoloLoteService, DeleteLoteProducaoService, ResumoPorCorLoteService };

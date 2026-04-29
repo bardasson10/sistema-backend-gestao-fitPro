@@ -332,3 +332,10 @@ export const addRolosLoteSchema = z.object({
         id: z.uuid("ID inválido"),
     }),
 });
+
+export const removeRoloLoteSchema = z.object({
+    params: z.object({
+        id: z.uuid("ID inválido"),
+        estoqueRoloId: z.uuid("ID de rolo inválido"),
+    }),
+});
