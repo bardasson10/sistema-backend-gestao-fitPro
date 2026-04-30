@@ -15,6 +15,7 @@ export interface IUpdateEstoqueRoloRequest {
     pesoAtualKg?: number;
     situacao?: string;
     usuarioId?: string;
+    codigoBarraRolo?: string;
 }
 
 export interface IEstoqueRoloResponse {

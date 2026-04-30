@@ -571,7 +571,7 @@ class GetResumoEstoqueRolosService {
 }
 
 class UpdateEstoqueRoloService {
-    async execute(id: string, { pesoAtualKg, situacao, usuarioId }: IUpdateEstoqueRoloRequest) {
+    async execute(id: string, { pesoAtualKg, situacao, usuarioId, codigoBarraRolo }: IUpdateEstoqueRoloRequest) {
         return prismaClient.$transaction(async (tx) => {
             const rolo = await tx.estoqueRolo.findUnique({
                 where: { id }
@@ -593,12 +593,27 @@ class UpdateEstoqueRoloService {
                 }
             }
 
+            // Validar código de barras se fornecido
+            if (codigoBarraRolo !== undefined && codigoBarraRolo.trim()) {
+                const codigoBarraRoloUpperCase = codigoBarraRolo.trim().toUpperCase();
+                
+                // Verificar se o código já existe em outro rolo
+                const codigoExistente = await tx.estoqueRolo.findUnique({
+                    where: { codigoBarraRolo: codigoBarraRoloUpperCase }
+                });
+
+                if (codigoExistente && codigoExistente.id !== id) {
+                    throw new Error("Código de barras já está em uso por outro rolo.");
+                }
+            }
+
             // Atualizar o rolo
             await tx.estoqueRolo.update({
                 where: { id },
                 data: {
                     pesoAtualKg,
-                    situacao
+                    situacao,
+                    ...(codigoBarraRolo !== undefined && codigoBarraRolo.trim() && { codigoBarraRolo: codigoBarraRolo.trim().toUpperCase() })
                 }
             });
 

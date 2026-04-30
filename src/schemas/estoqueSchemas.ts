@@ -17,6 +17,7 @@ export const updateEstoqueRoloSchema = z.object({
     body: z.object({
         pesoAtualKg: z.number().positive("Peso atual deve ser positivo").optional(),
         situacao: z.enum(["disponivel", "reservado", "em_uso", "descartado"]).optional(),
+        codigoBarraRolo: z.string().min(1, "Código de barra não pode estar vazio").optional(),
     }),
     params: z.object({
         id: z.uuid("ID inválido"),

@@ -48,12 +48,13 @@ class ListByIdEstoqueRoloController {
 class UpdateEstoqueRoloController {
     async handle(req: Request, res: Response) {
         const id = req.params.id as string 
-        const { pesoAtualKg, situacao } = req.body;
+        const { pesoAtualKg, situacao, codigoBarraRolo } = req.body;
         const usuarioId = req.userId;
         const rolo = await new UpdateEstoqueRoloService().execute(id, {
             pesoAtualKg,
             situacao,
-            usuarioId
+            usuarioId,
+            codigoBarraRolo
         });
         return res.json(rolo);
     }
