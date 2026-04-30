@@ -30,7 +30,7 @@ import { createFornecedorSchema, updateFornecedorSchema, createCorSchema, update
 import { CreateEstoqueRoloController, ListAllEstoqueRoloController, ListByIdEstoqueRoloController, UpdateEstoqueRoloController, DeleteEstoqueRoloController, GetRelatorioEstoqueController, GetResumoEstoqueRolosController } from "./controllers/estoque/EstoqueRoloController";
 import { CreateMovimentacaoEstoqueController, ListAllMovimentacaoEstoqueController, ListByIdMovimentacaoEstoqueController, GetHistoricoRoloController } from "./controllers/estoque/MovimentacaoEstoqueController";
 import { ListAllEstoqueCorteController, ListByIdEstoqueCorteController, AjusteEstoqueCorteController } from "./controllers/estoque/EstoqueCorteController";
-import { createEstoqueRoloSchema, updateEstoqueRoloSchema, createMovimentacaoEstoqueSchema, listEstoqueCorteSchema, ajusteEstoqueCorteSchema } from "./schemas/estoqueSchemas";
+import { createEstoqueRoloSchema, updateEstoqueRoloSchema, createMovimentacaoEstoqueSchema, listEstoqueCorteSchema, ajusteEstoqueCorteSchema, listEstoqueRolosSchema, getResumoEstoqueRolosSchema } from "./schemas/estoqueSchemas";
 
 // Produção Controllers
 import { CreateFaccaoController, ListAllFaccaoController, ListByIdFaccaoController, UpdateFaccaoController, DeleteFaccaoController } from "./controllers/producao/FaccaoController";
@@ -129,9 +129,9 @@ router.delete("/tecidos/:id", isAuthenticated, isAdmin, new DeleteTecidoControll
 
 // ==================== ESTOQUE ROLO ====================
 router.post("/estoque-rolos", isAuthenticated, validateSchema(createEstoqueRoloSchema), new CreateEstoqueRoloController().handle);
-router.get("/estoque-rolos/resumo", isAuthenticated, new GetResumoEstoqueRolosController().handle);
-router.get("/estoque-rolos/relatorio/geral", isAuthenticated, new GetRelatorioEstoqueController().handle);
-router.get("/estoque-rolos", isAuthenticated, new ListAllEstoqueRoloController().handle);
+router.get("/estoque-rolos/resumo", isAuthenticated, validateSchema(getResumoEstoqueRolosSchema), new GetResumoEstoqueRolosController().handle);
+router.get("/estoque-rolos/relatorio/geral", isAuthenticated, validateSchema(listEstoqueRolosSchema), new GetRelatorioEstoqueController().handle);
+router.get("/estoque-rolos", isAuthenticated, validateSchema(listEstoqueRolosSchema), new ListAllEstoqueRoloController().handle);
 router.get("/estoque-rolos/:id", isAuthenticated, new ListByIdEstoqueRoloController().handle);
 router.put("/estoque-rolos/:id", isAuthenticated, validateSchema(updateEstoqueRoloSchema), new UpdateEstoqueRoloController().handle);
 router.delete("/estoque-rolos/:id", isAuthenticated, isAdmin, new DeleteEstoqueRoloController().handle);

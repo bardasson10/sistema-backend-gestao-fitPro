@@ -177,6 +177,7 @@ class ListAllEstoqueRoloService {
         limit?: number | string,
         estoqueRoloId?: string,
         fornecedorId?: string,
+        corId?: string,
         tipoMovimentacao?: string,
         dataInicio?: string,
         dataFim?: string
@@ -199,9 +200,10 @@ class ListAllEstoqueRoloService {
                     ...(tecidoId && { tecidoId }),
                     ...(situacao && { situacao }),
                     ...(estoqueRoloId && { id: estoqueRoloId }),
-                    ...(fornecedorId && {
+                    ...((fornecedorId || corId) && {
                         tecido: {
-                            fornecedorId
+                            ...(fornecedorId && { fornecedorId }),
+                            ...(corId && { corId })
                         }
                     }),
                     ...(tipoMovimentacao || dataInicio || dataFim ? {
@@ -232,9 +234,10 @@ class ListAllEstoqueRoloService {
                     ...(tecidoId && { tecidoId }),
                     ...(situacao && { situacao }),
                     ...(estoqueRoloId && { id: estoqueRoloId }),
-                    ...(fornecedorId && {
+                    ...((fornecedorId || corId) && {
                         tecido: {
-                            fornecedorId
+                            ...(fornecedorId && { fornecedorId }),
+                            ...(corId && { corId })
                         }
                     }),
                     ...(tipoMovimentacao || dataInicio || dataFim ? {
@@ -274,6 +277,296 @@ class ListByIdEstoqueRoloService {
         }
 
         return rolo;
+    }
+}
+
+class GetRelatorioEstoqueService {
+    async execute(
+        tecidoId?: string,
+        situacao?: string,
+        estoqueRoloId?: string,
+        fornecedorId?: string,
+        corId?: string,
+        tipoMovimentacao?: string,
+        dataInicio?: string,
+        dataFim?: string,
+        _page?: number | string,
+        _limit?: number | string
+    ) {
+        const filtroMovimentacao = {
+            ...(tipoMovimentacao && { tipoMovimentacao }),
+            ...(dataInicio || dataFim ? {
+                createdAt: {
+                    ...(dataInicio && { gte: new Date(dataInicio) }),
+                    ...(dataFim && { lte: new Date(dataFim) })
+                }
+            } : {})
+        };
+
+        const rolos = await prismaClient.estoqueRolo.findMany({
+            where: {
+                ...(tecidoId && { tecidoId }),
+                ...(situacao && { situacao }),
+                ...(estoqueRoloId && { id: estoqueRoloId }),
+                ...((fornecedorId || corId) && {
+                    tecido: {
+                        ...(fornecedorId && { fornecedorId }),
+                        ...(corId && { corId })
+                    }
+                }),
+                ...(tipoMovimentacao || dataInicio || dataFim ? {
+                    movimentacoes: {
+                        some: filtroMovimentacao
+                    }
+                } : {})
+            },
+            include: {
+                tecido: true
+            }
+        });
+
+        const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
+            where: {
+                ...(estoqueRoloId && { estoqueRoloId }),
+                ...(filtroMovimentacao),
+                ...((tecidoId || situacao || fornecedorId || corId) && {
+                    rolo: {
+                        is: {
+                            ...(tecidoId && { tecidoId }),
+                            ...(situacao && { situacao }),
+                            ...((fornecedorId || corId) && {
+                                tecido: {
+                                    is: {
+                                        ...(fornecedorId && { fornecedorId }),
+                                        ...(corId && { corId })
+                                    }
+                                }
+                            })
+                        }
+                    }
+                })
+            },
+            include: {
+                rolo: {
+                    include: {
+                        tecido: {
+                            select: {
+                                valorPorKg: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const totalRolos = rolos.length;
+        const pesoTotalEstoque = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; }) => acc + parseFloat(rolo.pesoAtualKg.toString()), 0);
+        const valorTotalEstoque = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; tecido: { valorPorKg: { toString: () => string; } | null; }; }) => {
+            const pesoAtualKg = parseFloat(rolo.pesoAtualKg.toString());
+            const valorPorKg = rolo.tecido?.valorPorKg ? parseFloat(rolo.tecido.valorPorKg.toString()) : 0;
+            return acc + (pesoAtualKg * valorPorKg);
+        }, 0);
+        const pesoTotalMovimentado = movimentacoes.reduce((acc: number, mov: any) => acc + decimalToNumber(mov.pesoMovimentado), 0);
+        const valorTotalMovimentado = movimentacoes.reduce((acc: number, mov: any) => {
+            const pesoMovimentado = decimalToNumber(mov.pesoMovimentado);
+            const valorPorKg = decimalToNumber(mov.rolo?.tecido?.valorPorKg);
+            return acc + (pesoMovimentado * valorPorKg);
+        }, 0);
+        const usarTotaisMovimentacaoSaida = tipoMovimentacao === "saida";
+        const rolosDisponiveis = rolos.filter((r: { situacao: string; }) => r.situacao === "disponivel").length;
+        const rolosReservados = rolos.filter((r: { situacao: string; }) => r.situacao === "reservado").length;
+        const rolosEmUso = rolos.filter((r: { situacao: string; }) => r.situacao === "em_uso").length;
+        const movimentacoesMes = movimentacoes.length;
+
+        let tecidoComMaiorEstoque = "N/A";
+        if (rolos.length > 0) {
+            const estoquePorTecido = rolos.reduce((acc: { [x: string]: number; }, rolo: { tecidoId: string; pesoAtualKg: { toString: () => string; }; }) => {
+                const tecidoAtualId = rolo.tecidoId;
+                acc[tecidoAtualId] = (acc[tecidoAtualId] || 0) + parseFloat(rolo.pesoAtualKg.toString());
+                return acc;
+            }, {} as Record<string, number>);
+
+            const roloComMaiorEstoque = rolos.find((r: { tecidoId: string; }) => estoquePorTecido[r.tecidoId] === Math.max(...Object.values(estoquePorTecido).map(Number)));
+            if (roloComMaiorEstoque && roloComMaiorEstoque.tecido) {
+                tecidoComMaiorEstoque = roloComMaiorEstoque.tecido.nome;
+            }
+        }
+
+        return {
+            totalRolos,
+            pesoTotal: parseFloat((usarTotaisMovimentacaoSaida ? pesoTotalMovimentado : pesoTotalEstoque).toFixed(3)),
+            valorTotalEstoque: parseFloat((usarTotaisMovimentacaoSaida ? valorTotalMovimentado : valorTotalEstoque).toFixed(2)),
+            tecidoComMaiorEstoque,
+            rolosDisponiveis,
+            rolosReservados,
+            rolosEmUso,
+            movimentacoesMes
+        };
+    }
+}
+
+class GetResumoEstoqueRolosService {
+    async execute(
+        fornecedorId?: string,
+        tecidoId?: string,
+        corId?: string,
+        page?: number | string,
+        limit?: number | string,
+        estoqueRoloId?: string,
+        tipoMovimentacao?: string,
+        dataInicio?: string,
+        dataFim?: string
+    ): Promise<PaginatedResponse<any>> {
+        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
+        const tipoMovimentacaoPadrao = tipoMovimentacao || "entrada";
+        const resumoMovimentacaoSaida = tipoMovimentacaoPadrao === "saida";
+
+        const filtroMovimentacao = {
+            ...(tipoMovimentacaoPadrao && { tipoMovimentacao: tipoMovimentacaoPadrao }),
+            ...(dataInicio || dataFim ? {
+                createdAt: {
+                    ...(dataInicio && { gte: new Date(dataInicio) }),
+                    ...(dataFim && { lte: new Date(dataFim) })
+                }
+            } : {})
+        };
+
+        const montarResumo = (movimentacoes: any[]) => {
+            const resumoPorTecido = movimentacoes.reduce((acc: any, mov: any) => {
+                const rolo = mov.rolo;
+                const tecido = rolo?.tecido;
+                if (!rolo || !tecido) {
+                    return acc;
+                }
+
+                const tecidoIdAtual = rolo.tecidoId;
+
+                if (!acc[tecidoIdAtual]) {
+                    acc[tecidoIdAtual] = {
+                        tecidoId: tecidoIdAtual,
+                        tecido,
+                        rolosUnicos: new Set<string>(),
+                        pesoTotalRolos: 0,
+                        valorTotalRolos: 0
+                    };
+                }
+
+                const pesoMovimentado = decimalToNumber(mov.pesoMovimentado);
+                const valorPorKg = decimalToNumber(tecido.valorPorKg);
+
+                acc[tecidoIdAtual].rolosUnicos.add(rolo.id);
+                acc[tecidoIdAtual].pesoTotalRolos += pesoMovimentado;
+                acc[tecidoIdAtual].valorTotalRolos += pesoMovimentado * valorPorKg;
+
+                return acc;
+            }, {});
+
+            return Object.values(resumoPorTecido).map((item: any) => ({
+                qtdTotalRolos: item.rolosUnicos.size,
+                pesoTotalRolos: parseFloat(item.pesoTotalRolos.toFixed(3)),
+                valorTotalRolos: parseFloat(item.valorTotalRolos.toFixed(2)),
+                tecido: {
+                    id: item.tecido.id,
+                    nome: item.tecido.nome,
+                    codigoReferencia: item.tecido.codigoReferencia,
+                    cor: {
+                        id: item.tecido.cor?.id,
+                        nome: item.tecido.cor?.nome,
+                        codigoHex: item.tecido.cor?.codigoHex
+                    }
+                }
+            }));
+        };
+
+        if (resumoMovimentacaoSaida) {
+            const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
+                where: {
+                    ...(estoqueRoloId && { estoqueRoloId }),
+                    ...(filtroMovimentacao),
+                    ...((tecidoId || fornecedorId || corId) && {
+                        rolo: {
+                            is: {
+                                ...(tecidoId && { tecidoId }),
+                                ...((fornecedorId || corId) && {
+                                    tecido: {
+                                        is: {
+                                            ...(fornecedorId && { fornecedorId }),
+                                            ...(corId && { corId })
+                                        }
+                                    }
+                                })
+                            }
+                        }
+                    })
+                },
+                include: {
+                    rolo: {
+                        include: {
+                            tecido: {
+                                include: {
+                                    cor: true
+                                }
+                            }
+                        }
+                    }
+                },
+                orderBy: {
+                    createdAt: "desc"
+                }
+            });
+
+            const resumoArray = montarResumo(movimentacoes);
+            const totalItems = resumoArray.length;
+            const paginatedData = resumoArray.slice(skip, skip + pageLimit);
+
+            const response = createPaginatedResponse(paginatedData, totalItems, pageNumber, pageLimit) as any;
+            response.pagination.totalPages = response.pagination.pages;
+            return response;
+        }
+
+        const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
+            where: {
+                ...(estoqueRoloId && { estoqueRoloId }),
+                ...(filtroMovimentacao),
+                ...((tecidoId || fornecedorId || corId) && {
+                    rolo: {
+                        is: {
+                            ...(tecidoId && { tecidoId }),
+                            ...((fornecedorId || corId) && {
+                                tecido: {
+                                    is: {
+                                        ...(fornecedorId && { fornecedorId }),
+                                        ...(corId && { corId })
+                                    }
+                                }
+                            })
+                        }
+                    }
+                })
+            },
+            include: {
+                rolo: {
+                    include: {
+                        tecido: {
+                            include: {
+                                cor: true
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: "desc"
+            }
+        });
+
+        const resumoArray = montarResumo(movimentacoes);
+        const totalItems = resumoArray.length;
+        const paginatedData = resumoArray.slice(skip, skip + pageLimit);
+
+        const response = createPaginatedResponse(paginatedData, totalItems, pageNumber, pageLimit) as any;
+        response.pagination.totalPages = response.pagination.pages;
+        return response;
     }
 }
 
@@ -398,333 +691,6 @@ class DeleteEstoqueRoloService {
         });
 
         return { message: "Rolo deletado com sucesso." };
-    }
-}
-
-class GetRelatorioEstoqueService {
-    async execute(
-        tecidoId?: string,
-        situacao?: string,
-        estoqueRoloId?: string,
-        fornecedorId?: string,
-        tipoMovimentacao?: string,
-        dataInicio?: string,
-        dataFim?: string,
-        _page?: number | string,
-        _limit?: number | string
-    ) {
-        const filtroMovimentacao = {
-            ...(tipoMovimentacao && { tipoMovimentacao }),
-            ...(dataInicio || dataFim ? {
-                createdAt: {
-                    ...(dataInicio && { gte: new Date(dataInicio) }),
-                    ...(dataFim && { lte: new Date(dataFim) })
-                }
-            } : {})
-        };
-
-        const rolos = await prismaClient.estoqueRolo.findMany({
-            where: {
-                ...(tecidoId && { tecidoId }),
-                ...(situacao && { situacao }),
-                ...(estoqueRoloId && { id: estoqueRoloId }),
-                ...(fornecedorId && {
-                    tecido: {
-                        fornecedorId
-                    }
-                }),
-                ...(tipoMovimentacao || dataInicio || dataFim ? {
-                    movimentacoes: {
-                        some: filtroMovimentacao
-                    }
-                } : {})
-            },
-            include: {
-                tecido: true
-            }
-        });
-
-        const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
-            where: {
-                ...(estoqueRoloId && { estoqueRoloId }),
-                ...(filtroMovimentacao),
-                ...((tecidoId || situacao || fornecedorId) && {
-                    rolo: {
-                        is: {
-                            ...(tecidoId && { tecidoId }),
-                            ...(situacao && { situacao }),
-                            ...(fornecedorId && {
-                                tecido: {
-                                    is: {
-                                        fornecedorId
-                                    }
-                                }
-                            })
-                        }
-                    }
-                })
-            },
-            include: {
-                rolo: {
-                    include: {
-                        tecido: {
-                            select: {
-                                valorPorKg: true
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        const totalRolos = rolos.length;
-        const pesoTotalEstoque = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; }) => acc + parseFloat(rolo.pesoAtualKg.toString()), 0);
-        const valorTotalEstoque = rolos.reduce((acc: number, rolo: { pesoAtualKg: { toString: () => string; }; tecido: { valorPorKg: { toString: () => string; } | null; }; }) => {
-            const pesoAtualKg = parseFloat(rolo.pesoAtualKg.toString());
-            const valorPorKg = rolo.tecido?.valorPorKg ? parseFloat(rolo.tecido.valorPorKg.toString()) : 0;
-            return acc + (pesoAtualKg * valorPorKg);
-        }, 0);
-        const pesoTotalMovimentado = movimentacoes.reduce((acc: number, mov: any) => acc + decimalToNumber(mov.pesoMovimentado), 0);
-        const valorTotalMovimentado = movimentacoes.reduce((acc: number, mov: any) => {
-            const pesoMovimentado = decimalToNumber(mov.pesoMovimentado);
-            const valorPorKg = decimalToNumber(mov.rolo?.tecido?.valorPorKg);
-            return acc + (pesoMovimentado * valorPorKg);
-        }, 0);
-        const usarTotaisMovimentacaoSaida = tipoMovimentacao === "saida";
-        const rolosDisponiveis = rolos.filter((r: { situacao: string; }) => r.situacao === "disponivel").length;
-        const rolosReservados = rolos.filter((r: { situacao: string; }) => r.situacao === "reservado").length;
-        const rolosEmUso = rolos.filter((r: { situacao: string; }) => r.situacao === "em_uso").length;
-        const movimentacoesMes = movimentacoes.length;
-
-        // Encontrar tecido com maior estoque
-        let tecidoComMaiorEstoque = "N/A";
-        if (rolos.length > 0) {
-            const estoquePorTecido = rolos.reduce((acc: { [x: string]: any; }, rolo: { tecidoId: any; pesoAtualKg: { toString: () => string; }; }) => {
-                const tecidoId = rolo.tecidoId;
-                acc[tecidoId] = (acc[tecidoId] || 0) + parseFloat(rolo.pesoAtualKg.toString());
-                return acc;
-            }, {} as Record<string, number>);
-
-            const roloComMaiorEstoque = rolos.find((r: { tecidoId: string | number; }) => estoquePorTecido[r.tecidoId] === Math.max(...Object.values(estoquePorTecido).map(Number)));
-            if (roloComMaiorEstoque && roloComMaiorEstoque.tecido) {
-                tecidoComMaiorEstoque = roloComMaiorEstoque.tecido.nome;
-            }
-        }
-
-        return {
-            totalRolos,
-            pesoTotal: parseFloat((usarTotaisMovimentacaoSaida ? pesoTotalMovimentado : pesoTotalEstoque).toFixed(3)),
-            valorTotalEstoque: parseFloat((usarTotaisMovimentacaoSaida ? valorTotalMovimentado : valorTotalEstoque).toFixed(2)),
-            tecidoComMaiorEstoque,
-            rolosDisponiveis,
-            rolosReservados,
-            rolosEmUso,
-            movimentacoesMes
-        };
-    }
-}
-
-class GetResumoEstoqueRolosService {
-    async execute(
-        fornecedorId?: string,
-        tecidoId?: string,
-        page?: number | string,
-        limit?: number | string,
-        estoqueRoloId?: string,
-        tipoMovimentacao?: string,
-        dataInicio?: string,
-        dataFim?: string
-    ): Promise<PaginatedResponse<any>> {
-        const { page: pageNumber, limit: pageLimit, skip } = parsePaginationParams(page, limit);
-        const tipoMovimentacaoPadrao = tipoMovimentacao || "entrada";
-        const resumoMovimentacaoSaida = tipoMovimentacaoPadrao === "saida";
-
-        const filtroMovimentacao = {
-            ...(tipoMovimentacaoPadrao && { tipoMovimentacao: tipoMovimentacaoPadrao }),
-            ...(dataInicio || dataFim ? {
-                createdAt: {
-                    ...(dataInicio && { gte: new Date(dataInicio) }),
-                    ...(dataFim && { lte: new Date(dataFim) })
-                }
-            } : {})
-        };
-
-        if (resumoMovimentacaoSaida) {
-            const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
-                where: {
-                    ...(estoqueRoloId && { estoqueRoloId }),
-                    ...(filtroMovimentacao),
-                    ...((tecidoId || fornecedorId) && {
-                        rolo: {
-                            is: {
-                                ...(tecidoId && { tecidoId }),
-                                ...(fornecedorId && {
-                                    tecido: {
-                                        is: {
-                                            fornecedorId
-                                        }
-                                    }
-                                })
-                            }
-                        }
-                    })
-                },
-                include: {
-                    rolo: {
-                        include: {
-                            tecido: {
-                                include: {
-                                    cor: true
-                                }
-                            }
-                        }
-                    }
-                },
-                orderBy: {
-                    createdAt: "desc"
-                }
-            });
-
-            const resumoPorTecido = movimentacoes.reduce((acc: any, mov: any) => {
-                const rolo = mov.rolo;
-                const tecido = rolo?.tecido;
-                if (!rolo || !tecido) {
-                    return acc;
-                }
-
-                const tecidoIdAtual = rolo.tecidoId;
-
-                if (!acc[tecidoIdAtual]) {
-                    acc[tecidoIdAtual] = {
-                        tecidoId: tecidoIdAtual,
-                        tecido,
-                        rolosUnicos: new Set<string>(),
-                        pesoTotalRolos: 0,
-                        valorTotalRolos: 0
-                    };
-                }
-
-                const pesoMovimentado = decimalToNumber(mov.pesoMovimentado);
-                const valorPorKg = decimalToNumber(tecido.valorPorKg);
-
-                acc[tecidoIdAtual].rolosUnicos.add(rolo.id);
-                acc[tecidoIdAtual].pesoTotalRolos += pesoMovimentado;
-                acc[tecidoIdAtual].valorTotalRolos += pesoMovimentado * valorPorKg;
-
-                return acc;
-            }, {});
-
-            const resumoArray = Object.values(resumoPorTecido).map((item: any) => ({
-                qtdTotalRolos: item.rolosUnicos.size,
-                pesoTotalRolos: parseFloat(item.pesoTotalRolos.toFixed(3)),
-                valorTotalRolos: parseFloat(item.valorTotalRolos.toFixed(2)),
-                tecido: {
-                    id: item.tecido.id,
-                    nome: item.tecido.nome,
-                    codigoReferencia: item.tecido.codigoReferencia,
-                    cor: {
-                        id: item.tecido.cor?.id,
-                        nome: item.tecido.cor?.nome,
-                        codigoHex: item.tecido.cor?.codigoHex
-                    }
-                }
-            }));
-
-            const totalItems = resumoArray.length;
-            const paginatedData = resumoArray.slice(skip, skip + pageLimit);
-
-            const response = createPaginatedResponse(paginatedData, totalItems, pageNumber, pageLimit) as any;
-            response.pagination.totalPages = response.pagination.pages;
-            return response;
-        }
-
-        const movimentacoes = await prismaClient.movimentacaoEstoque.findMany({
-            where: {
-                ...(estoqueRoloId && { estoqueRoloId }),
-                ...(filtroMovimentacao),
-                ...((tecidoId || fornecedorId) && {
-                    rolo: {
-                        is: {
-                            ...(tecidoId && { tecidoId }),
-                            ...(fornecedorId && {
-                                tecido: {
-                                    is: {
-                                        fornecedorId
-                                    }
-                                }
-                            })
-                        }
-                    }
-                })
-            },
-            include: {
-                rolo: {
-                    include: {
-                        tecido: {
-                            include: {
-                                cor: true
-                            }
-                        }
-                    }
-                }
-            },
-            orderBy: {
-                createdAt: "desc"
-            }
-        });
-
-        const resumoPorTecido = movimentacoes.reduce((acc: any, mov: any) => {
-            const rolo = mov.rolo;
-            const tecido = rolo?.tecido;
-            if (!rolo || !tecido) {
-                return acc;
-            }
-
-            const tecidoIdAtual = rolo.tecidoId;
-
-            if (!acc[tecidoIdAtual]) {
-                acc[tecidoIdAtual] = {
-                    tecidoId: tecidoIdAtual,
-                    tecido,
-                    rolosUnicos: new Set<string>(),
-                    pesoTotalRolos: 0,
-                    valorTotalRolos: 0
-                };
-            }
-
-            const pesoMovimentado = decimalToNumber(mov.pesoMovimentado);
-            const valorPorKg = decimalToNumber(tecido.valorPorKg);
-
-            acc[tecidoIdAtual].rolosUnicos.add(rolo.id);
-            acc[tecidoIdAtual].pesoTotalRolos += pesoMovimentado;
-            acc[tecidoIdAtual].valorTotalRolos += pesoMovimentado * valorPorKg;
-
-            return acc;
-        }, {});
-
-        const resumoArray = Object.values(resumoPorTecido).map((item: any) => ({
-            qtdTotalRolos: item.rolosUnicos.size,
-            pesoTotalRolos: parseFloat(item.pesoTotalRolos.toFixed(3)),
-            valorTotalRolos: parseFloat(item.valorTotalRolos.toFixed(2)),
-            tecido: {
-                id: item.tecido.id,
-                nome: item.tecido.nome,
-                codigoReferencia: item.tecido.codigoReferencia,
-                cor: {
-                    id: item.tecido.cor?.id,
-                    nome: item.tecido.cor?.nome,
-                    codigoHex: item.tecido.cor?.codigoHex
-                }
-            }
-        }));
-
-        // Aplicar paginação no array processado
-        const totalItems = resumoArray.length;
-        const paginatedData = resumoArray.slice(skip, skip + pageLimit);
-
-        const response = createPaginatedResponse(paginatedData, totalItems, pageNumber, pageLimit) as any;
-        response.pagination.totalPages = response.pagination.pages;
-        return response;
     }
 }
 

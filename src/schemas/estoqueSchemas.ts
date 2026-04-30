@@ -112,7 +112,23 @@ export const getResumoEstoqueRolosSchema = z.object({
     query: z.object({
         fornecedorId: z.uuid().optional(),
         tecidoId: z.uuid().optional(),
+        corId: z.uuid().optional(),
         page: z.string().regex(/^\d+$/, "Page deve ser numerico").optional(),
         limit: z.string().regex(/^\d+$/, "Limit deve ser numerico").optional(),
+    }),
+});
+
+export const listEstoqueRolosSchema = z.object({
+    query: z.object({
+        tecidoId: z.uuid().optional(),
+        situacao: z.enum(["disponivel", "reservado", "em_uso", "descartado"]).optional(),
+        estoqueRoloId: z.uuid().optional(),
+        fornecedorId: z.uuid().optional(),
+        corId: z.uuid().optional(),
+        tipoMovimentacao: z.enum(["entrada", "saida", "ajuste", "devolucao"]).optional(),
+        dataInicio: z.string().datetime().optional(),
+        dataFim: z.string().datetime().optional(),
+        page: z.coerce.number().int().positive().optional(),
+        limit: z.coerce.number().int().positive().optional(),
     }),
 });
