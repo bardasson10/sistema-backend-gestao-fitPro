@@ -6,44 +6,16 @@ function decimalToNumber(value: { toString: () => string } | null | undefined): 
     return value ? parseFloat(value.toString()) : 0;
 }
 
-function getColorAbbreviation(colorName: string): string {
-    return colorName.toUpperCase();
-}
-
-function getFabricInitials(tecidoNome: string): string {
-    const palavras = tecidoNome
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-    if (palavras.length === 0) {
-        return "TEC";
+function getFabricCode(codigoReferencia?: string | null): string {
+    if (!codigoReferencia?.trim()) {
+        throw new Error("Tecido sem código de referência cadastrado.");
     }
 
-    return palavras.map((palavra) => palavra[0]).join("").toUpperCase();
+    return codigoReferencia.trim().toUpperCase();
 }
 
-function getFabricCode(tecidoNome: string, codigoReferencia?: string | null): string {
-    if (codigoReferencia) {
-        return codigoReferencia.trim().toUpperCase();
-    }
-    return getFabricInitials(tecidoNome);
-}
-
-function buildBaseCodigo(fabricCode: string, colorCode: string, dataLoteCodigo: string): string {
-    const fabricParts = fabricCode
-        .split("-")
-        .map((part) => part.trim())
-        .filter(Boolean);
-
-    const lastPart = fabricParts[fabricParts.length - 1];
-    const corJaNoCodigo = lastPart === colorCode;
-
-    if (corJaNoCodigo) {
-        return `${fabricCode}-${dataLoteCodigo}`;
-    }
-
-    return `${fabricCode}-${colorCode}-${dataLoteCodigo}`;
+function buildBaseCodigo(fabricCode: string, dataLoteCodigo: string): string {
+    return `${fabricCode}-${dataLoteCodigo}`;
 }
 
 function formatarDataLoteParaCodigo(dataLote: string): string {
@@ -91,10 +63,9 @@ class CreateEstoqueRoloService {
                 throw new Error("Tecido não encontrado.");
             }
 
-            const fabricCode = getFabricCode(tecido.nome, tecido.codigoReferencia);
-            const colorAbbrev = getColorAbbreviation(tecido.cor?.nome || "");
+            const fabricCode = getFabricCode(tecido.codigoReferencia);
             const dataLoteCodigo = formatarDataLoteParaCodigo(dataLote);
-            const baseCodigo = buildBaseCodigo(fabricCode, colorAbbrev, dataLoteCodigo);
+            const baseCodigo = buildBaseCodigo(fabricCode, dataLoteCodigo);
 
             const codigosExistentes = await tx.estoqueRolo.findMany({
                 where: {
