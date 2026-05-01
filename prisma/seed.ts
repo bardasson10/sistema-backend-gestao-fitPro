@@ -24,11 +24,10 @@ async function main() {
 
     // Seed de Tamanhos
     const tamanhos = [
-        { nome: 'PP', ordem: 1 },
-        { nome: 'P', ordem: 2 },
-        { nome: 'M', ordem: 3 },
-        { nome: 'G', ordem: 4 },
-        { nome: 'GG', ordem: 5 },
+        { nome: 'P', ordem: 1 },
+        { nome: 'M', ordem: 2 },
+        { nome: 'G', ordem: 3 },
+        { nome: 'GG', ordem: 4 },
     ];
 
     console.log('📦 Criando tamanhos...');

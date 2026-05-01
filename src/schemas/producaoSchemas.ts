@@ -197,7 +197,7 @@ export const createConferenciaSchema = z.object({
         items: z.array(z.object({
             id: z.uuid("ID de item da conferência inválido").optional(),
             direcionamentoItemId: z.uuid("ID de item do direcionamento inválido").optional(),
-            qtdRecebida: z.number().int().positive("Quantidade deve ser positiva"),
+            qtdRecebida: z.number().int().nonnegative("Quantidade deve ser maior ou igual a zero"),
             qtdDefeito: z.number().int().nonnegative("Defeitos não podem ser negativos").optional(),
         }).superRefine((item, ctx) => {
             if (!item.id && !item.direcionamentoItemId) {
@@ -225,7 +225,7 @@ export const updateConferenciaSchema = z.object({
         items: z.array(z.object({
             id: z.uuid("ID de item da conferência inválido").optional(),
             direcionamentoItemId: z.uuid("ID de item do direcionamento inválido").optional(),
-            qtdRecebida: z.number().int().positive("Quantidade deve ser positiva"),
+            qtdRecebida: z.number().int().nonnegative("Quantidade deve ser maior ou igual a zero"),
             qtdDefeito: z.number().int().nonnegative("Defeitos não podem ser negativos").optional(),
         }).superRefine((item, ctx) => {
             if (!item.id && !item.direcionamentoItemId) {
